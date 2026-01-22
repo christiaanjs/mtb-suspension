@@ -122,7 +122,7 @@ export function Graph({
 
   // Build path
   const pathPoints = yData.map((y, i) => `${scaleX(xData[i])},${scaleY(y)}`);
-  const pathString = pathPoints.join(" L ");
+  const pathString = pathPoints.join(" ");
 
   return (
     <div className="w-full h-full flex flex-col bg-white dark:bg-gray-950">
