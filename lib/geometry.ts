@@ -83,7 +83,7 @@ export function calculateChainLength(
   const chainringArc = chainringRadius * chainringWrap;
   const cogArc = cogRadius * cogWrap;
 
-  return tangentLength + chainringArc + cogArc;
+  return 2 * tangentLength + chainringArc + cogArc;
 }
 
 export function sprocketRadius(teeth: number): number {
