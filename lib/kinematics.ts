@@ -249,97 +249,112 @@ function calculateStateAtShockStroke(
     };
   }
 
+  // CRITICAL: Always use the same eye candidate index determined at top-out
+  // This locks in the triangle orientation and prevents flipping
   const chosenEye = eyeCandidates[rigidTriangle.correctEyeIndex];
 
-  const verticalDist = rearWheelRadius - pivot.y;
-  const horizontalDistSquared =
-    rigidTriangle.pivotToAxle * rigidTriangle.pivotToAxle -
-    verticalDist * verticalDist;
+  // Find axle using rigid triangle constraint
+  // We know: pivot position, eye position, all three side lengths (fixed)
+  const pivotToEyeDist = distance(pivot, chosenEye);
+  const pivotToAxleDist = rigidTriangle.pivotToAxle;
 
-  if (horizontalDistSquared < 0) {
-    return {
-      travelMM: shockStroke,
-      rearAxlePosition: { x: 0, y: rearWheelRadius },
-      bbPosition: { x: 0, y: geometry.bbHeight },
-      pivotPosition: pivot,
-      swingarmEyePosition: chosenEye,
-      frontAxlePosition: { x: 0, y: 0 },
-      shockLength: currentShockLength,
-      leverageRatio: 0,
-      antiSquat: 0,
-      antiRise: 0,
-      pedalKickback: 0,
-      chainGrowth: 0,
-      totalChainGrowth: 0,
-      wheelRate: 0,
-      trail: 0,
-      crankAngle: 0,
-      forkCompression: 0,
-      pitchAngleDegrees: 0,
-    };
-  }
+  // Law of cosines: angle at pivot in the triangle
+  const cosAngle =
+    (pivotToEyeDist * pivotToEyeDist +
+      pivotToAxleDist * pivotToAxleDist -
+      eyeToAxleDistance * eyeToAxleDistance) /
+    (2 * pivotToEyeDist * pivotToAxleDist);
+  const angleAtPivot = Math.acos(cosAngle);
 
-  const horizontalDist = Math.sqrt(horizontalDistSquared);
+  const pivotToEyeAngle = angle(pivot, chosenEye);
 
-  const axle1: Point2D = {
-    x: pivot.x + horizontalDist,
+  // Use the rigid triangle orientation to pick the correct axle
+  // No tracking or selection needed - the orientation is fixed throughout travel!
+  const axleAngle = rigidTriangle.axleAngleIsPositive
+    ? pivotToEyeAngle + angleAtPivot // Positive: add angle
+    : pivotToEyeAngle - angleAtPivot; // Negative: subtract angle
+
+  const nominalAxle: Point2D = {
+    x: pivot.x + pivotToAxleDist * Math.cos(axleAngle),
+    y: pivot.y + pivotToAxleDist * Math.sin(axleAngle),
+  };
+
+  // Adjust entire frame DOWN so rear axle is on ground
+  const groundOffset = nominalAxle.y - rearWheelRadius;
+  const bbY = geometry.bbHeight - groundOffset;
+
+  // Final positions (no pitch adjustment)
+  const rearAxlePos: Point2D = {
+    x: nominalAxle.x,
     y: rearWheelRadius,
   };
-  const axle2: Point2D = {
-    x: pivot.x - horizontalDist,
-    y: rearWheelRadius,
+  const bbPos: Point2D = {
+    x: 0,
+    y: bbY,
+  };
+  const pivotPos: Point2D = {
+    x: geometry.bbToPivotX,
+    y: pivot.y - groundOffset,
+  };
+  const swingarmEyePos: Point2D = {
+    x: chosenEye.x,
+    y: chosenEye.y - groundOffset,
+  };
+  const finalFrameMount: Point2D = {
+    x: geometry.shockFrameMountX,
+    y: bbY + geometry.shockFrameMountY,
   };
 
-  const axle = axle1.x < axle2.x ? axle1 : axle2;
-
-  // Calculate lever arm for anti-squat (geometry based)
-  // const chainringRadius = (32 * 12.7) / (2 * Math.PI);
-  // const cogRadius = (geometry.cogTeeth * 12.7) / (2 * Math.PI);
-
-  const swingarmAngle = angle(pivot, axle);
-  const swingarmVector = {
-    x: Math.cos(swingarmAngle),
-    y: Math.sin(swingarmAngle),
+  // Calculate front wheel position
+  const htaRad = geometry.headAngle * (Math.PI / 180);
+  const frontAxlePos: Point2D = {
+    x:
+      bbPos.x +
+      geometry.reach +
+      geometry.headTubeLength * Math.cos(htaRad) +
+      geometry.forkLength * Math.cos(htaRad) +
+      geometry.forkOffset * Math.sin(htaRad),
+    y:
+      bbPos.y +
+      geometry.stack -
+      geometry.headTubeLength * Math.sin(htaRad) -
+      geometry.forkLength * Math.sin(htaRad) +
+      geometry.forkOffset * Math.cos(htaRad),
   };
 
-  // Drive line direction (simplified - from chainring to cog)
-  const chainringPos: Point2D = {
-    x: geometry.chainringOffsetX,
-    y: geometry.chainringOffsetY,
-  };
-  const cogPos: Point2D = {
-    x: axle.x + geometry.chainringOffsetX,
-    y: axle.y + geometry.chainringOffsetY,
-  };
+  // Calculate pitch angle
+  const dx = frontAxlePos.x - rearAxlePos.x;
+  const dy = frontAxlePos.y - rearAxlePos.y;
+  const centerDist = Math.sqrt(dx * dx + dy * dy);
 
-  const driveLineAngle = angle(chainringPos, cogPos);
-  const driveLineVector = {
-    x: Math.cos(driveLineAngle),
-    y: Math.sin(driveLineAngle),
-  };
+  const centerAngle = Math.atan2(dy, dx);
+  const frontWheelRadius = computedProperties.frontWheelRadius(geometry);
+  const radiusDiff = frontWheelRadius - rearWheelRadius;
+  const angleOffset = Math.asin(radiusDiff / centerDist);
+  const tangentAngle = centerAngle - angleOffset;
 
-  // Anti-squat: component of drive line perpendicular to swingarm
-  const perpDot =
-    -driveLineVector.x * swingarmVector.y +
-    driveLineVector.y * swingarmVector.x;
-  const antiSquat = Math.max(0, Math.min(100, perpDot * 100));
+  const pitchAngleDegrees = (tangentAngle * 180.0) / Math.PI;
 
-  // Anti-rise: similar calculation for braking (opposite of drive line)
-  const antiRise = Math.max(0, Math.min(100, -perpDot * 100));
+  // Calculate wheel travel
+  const wheelTravel = Math.abs(geometry.bbHeight - bbY);
 
-  const leverageRatio = eyeToAxleDistance / distance(chosenEye, axle);
+  // Calculate shock length with adjusted frame position
+  const shockLength = distance(finalFrameMount, swingarmEyePos);
+
+  // Calculate leverage ratio from the rigid triangle geometry
+  const leverageRatio = eyeToAxleDistance / distance(chosenEye, nominalAxle);
 
   const state: KinematicState = {
-    travelMM: shockStroke,
-    rearAxlePosition: axle,
-    bbPosition: { x: 0, y: geometry.bbHeight },
-    pivotPosition: pivot,
-    swingarmEyePosition: chosenEye,
-    frontAxlePosition: { x: 0, y: 0 },
-    shockLength: currentShockLength,
+    travelMM: wheelTravel,
+    rearAxlePosition: rearAxlePos,
+    bbPosition: bbPos,
+    pivotPosition: pivotPos,
+    swingarmEyePosition: swingarmEyePos,
+    frontAxlePosition: frontAxlePos,
+    shockLength,
     leverageRatio,
-    antiSquat,
-    antiRise,
+    antiSquat: 0, // Will be calculated in runKinematicAnalysis
+    antiRise: 0, // Will be calculated in runKinematicAnalysis
     pedalKickback: 0,
     chainGrowth: 0,
     totalChainGrowth: 0,
@@ -347,7 +362,7 @@ function calculateStateAtShockStroke(
     trail: 0,
     crankAngle: 0,
     forkCompression: 0,
-    pitchAngleDegrees: 0,
+    pitchAngleDegrees,
   };
 
   return state;
