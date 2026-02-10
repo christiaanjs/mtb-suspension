@@ -2,6 +2,7 @@
 import {
   BikeGeometry,
   KinematicState,
+  KinematicStateFirstPass,
   AnalysisResults,
   Point2D,
   computedProperties,
@@ -17,15 +18,15 @@ interface RigidTriangle {
 }
 
 export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
-  const states: KinematicState[] = [];
-  const axlePath: Point2D[] = [];
-  const frontAxlePath: Point2D[] = [];
-
   const rigidTriangle = establishRigidTriangle(geometry);
 
   const stepSize = 0.5; // mm - finer steps for smoother graphs
   const strokeSteps = Math.floor(geometry.shockStroke / stepSize) + 1;
 
+  // First pass: calculate basic geometric state from shock stroke only
+  const firstPassStates: (KinematicStateFirstPass & {
+    proportionalForkStroke: number;
+  })[] = [];
   for (let step = 0; step < strokeSteps; step++) {
     const shockStroke = step * stepSize; // mm of shock compression
 
@@ -39,48 +40,108 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
       rigidTriangle,
     );
 
-    // Update fork compression
-    state.forkCompression = proportionalForkStroke;
+    firstPassStates.push({
+      ...state,
+      proportionalForkStroke,
+    });
+  }
 
-    // Recalculate front axle position with proportional fork compression
+  // Second pass: extend first-pass states with derived values
+  const states: KinematicState[] = [];
+  const axlePath: Point2D[] = [];
+  const frontAxlePath: Point2D[] = [];
+
+  for (let i = 0; i < firstPassStates.length; i++) {
+    const firstPassState = firstPassStates[i];
+
+    // Calculate front axle position with proportional fork compression
     const htaRad = computedProperties.headTubeAngleRadians(geometry);
-    const effectiveForkLength = geometry.forkLength - proportionalForkStroke;
+    const effectiveForkLength = geometry.forkLength - firstPassState.proportionalForkStroke;
 
     const frontAxlePos: Point2D = {
       x:
-        state.bbPosition.x +
+        firstPassState.bbPosition.x +
         geometry.reach +
         geometry.headTubeLength * Math.cos(htaRad) +
         effectiveForkLength * Math.cos(htaRad) +
         geometry.forkOffset * Math.sin(htaRad),
       y:
-        state.bbPosition.y +
+        firstPassState.bbPosition.y +
         geometry.stack -
         geometry.headTubeLength * Math.sin(htaRad) -
         effectiveForkLength * Math.sin(htaRad) +
         geometry.forkOffset * Math.cos(htaRad),
     };
 
-    state.frontAxlePosition = frontAxlePos;
-
-    // Recalculate pitch with updated front axle
-    const rearCenter = state.rearAxlePosition;
-    const frontCenter = frontAxlePos;
-
-    const dx = frontCenter.x - rearCenter.x;
-    const dy = frontCenter.y - rearCenter.y;
+    // Recalculate pitch angle with the actual front axle position
+    const dx = frontAxlePos.x - firstPassState.rearAxlePosition.x;
+    const dy = frontAxlePos.y - firstPassState.rearAxlePosition.y;
     const centerDist = Math.sqrt(dx * dx + dy * dy);
 
     const centerAngle = Math.atan2(dy, dx);
-    const frontRadius = computedProperties.frontWheelRadius(geometry);
-    const rearRadius = computedProperties.rearWheelRadius(geometry);
-    const radiusDiff = frontRadius - rearRadius;
+    const frontWheelRadius = computedProperties.frontWheelRadius(geometry);
+    const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
+    const radiusDiff = frontWheelRadius - rearWheelRadius;
     const angleOffset = Math.asin(radiusDiff / centerDist);
     const tangentAngle = centerAngle - angleOffset;
+    const pitchAngleDegrees = (tangentAngle * 180.0) / Math.PI;
 
-    state.pitchAngleDegrees = (tangentAngle * 180.0) / Math.PI;
+    // Create the full kinematic state by extending the first-pass state
+    const state: KinematicState = {
+      travelMM: firstPassState.travelMM,
+      rearAxlePosition: firstPassState.rearAxlePosition,
+      bbPosition: firstPassState.bbPosition,
+      pivotPosition: firstPassState.pivotPosition,
+      swingarmEyePosition: firstPassState.swingarmEyePosition,
+      shockLength: firstPassState.shockLength,
+      pitchAngleDegrees,
+      frontAxlePosition: frontAxlePos,
+      forkCompression: firstPassState.proportionalForkStroke,
+      leverageRatio: 0,
+      wheelRate: 0,
+      antiSquat: 0,
+      antiRise: 0,
+      pedalKickback: 0,
+      chainGrowth: 0,
+      totalChainGrowth: 0,
+      trail: 0,
+      crankAngle: 0,
+    };
 
-    // Recalculate anti-squat and anti-rise
+    // Calculate leverage ratio as dWheelTravel / dShockStroke (numerical derivative)
+    if (i === 0) {
+      // At first point: use forward difference
+      if (firstPassStates.length > 1) {
+        const wheelTravelDelta =
+          firstPassStates[i + 1].travelMM - firstPassStates[i].travelMM;
+        const shockStrokeDelta = stepSize;
+        state.leverageRatio =
+          shockStrokeDelta > 0 ? wheelTravelDelta / shockStrokeDelta : 1.0;
+      } else {
+        state.leverageRatio = 1.0;
+      }
+    } else if (i === firstPassStates.length - 1) {
+      // At last point: use backward difference
+      const wheelTravelDelta =
+        firstPassStates[i].travelMM - firstPassStates[i - 1].travelMM;
+      const shockStrokeDelta = stepSize;
+      state.leverageRatio =
+        shockStrokeDelta > 0 ? wheelTravelDelta / shockStrokeDelta : 1.0;
+    } else {
+      // In the middle: use central difference for better accuracy
+      const wheelTravelDelta =
+        firstPassStates[i + 1].travelMM - firstPassStates[i - 1].travelMM;
+      const shockStrokeDelta = 2 * stepSize;
+      state.leverageRatio =
+        shockStrokeDelta > 0 ? wheelTravelDelta / shockStrokeDelta : 1.0;
+    }
+
+    // Calculate wheel rate using actual leverage ratio
+    state.wheelRate =
+      geometry.shockSpringRate /
+      (state.leverageRatio * state.leverageRatio);
+
+    // Calculate anti-squat and anti-rise from visual geometry
     state.antiSquat = calculateVisualAntiSquat(state, geometry);
     state.antiRise = calculateVisualAntiRise(state, geometry);
 
@@ -203,7 +264,7 @@ function calculateStateAtShockStroke(
   shockStroke: number,
   geometry: BikeGeometry,
   rigidTriangle: RigidTriangle,
-): KinematicState {
+): KinematicStateFirstPass {
   const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
   // const frontWheelRadius = computedProperties.frontWheelRadius(geometry);
 
@@ -228,23 +289,12 @@ function calculateStateAtShockStroke(
 
   if (eyeCandidates.length === 0) {
     return {
-      travelMM: shockStroke,
+      travelMM: 0,
       rearAxlePosition: { x: 0, y: rearWheelRadius },
       bbPosition: { x: 0, y: geometry.bbHeight },
       pivotPosition: pivot,
       swingarmEyePosition: { x: 0, y: 0 },
-      frontAxlePosition: { x: 0, y: 0 },
       shockLength: currentShockLength,
-      leverageRatio: 0,
-      antiSquat: 0,
-      antiRise: 0,
-      pedalKickback: 0,
-      chainGrowth: 0,
-      totalChainGrowth: 0,
-      wheelRate: 0,
-      trail: 0,
-      crankAngle: 0,
-      forkCompression: 0,
       pitchAngleDegrees: 0,
     };
   }
@@ -341,27 +391,13 @@ function calculateStateAtShockStroke(
   // Calculate shock length with adjusted frame position
   const shockLength = distance(finalFrameMount, swingarmEyePos);
 
-  // Calculate leverage ratio from the rigid triangle geometry
-  const leverageRatio = eyeToAxleDistance / distance(chosenEye, nominalAxle);
-
-  const state: KinematicState = {
+  const state: KinematicStateFirstPass = {
     travelMM: wheelTravel,
     rearAxlePosition: rearAxlePos,
     bbPosition: bbPos,
     pivotPosition: pivotPos,
     swingarmEyePosition: swingarmEyePos,
-    frontAxlePosition: frontAxlePos,
     shockLength,
-    leverageRatio,
-    antiSquat: 0, // Will be calculated in runKinematicAnalysis
-    antiRise: 0, // Will be calculated in runKinematicAnalysis
-    pedalKickback: 0,
-    chainGrowth: 0,
-    totalChainGrowth: 0,
-    wheelRate: geometry.shockSpringRate * leverageRatio * leverageRatio,
-    trail: 0,
-    crankAngle: 0,
-    forkCompression: 0,
     pitchAngleDegrees,
   };
 

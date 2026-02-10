@@ -127,25 +127,39 @@ export function createDefaultGeometry(): BikeGeometry {
   };
 }
 
-export interface KinematicState {
+// First pass: kinematic state calculated from shock stroke only
+export interface KinematicStateFirstPass {
   travelMM: number;
   rearAxlePosition: Point2D;
   bbPosition: Point2D;
   pivotPosition: Point2D;
   swingarmEyePosition: Point2D;
-  frontAxlePosition: Point2D;
   shockLength: number;
+  pitchAngleDegrees: number;
+}
+
+// Complete kinematic state (first pass + second pass calculations)
+export interface KinematicState extends KinematicStateFirstPass {
+  // Geometry - calculated in second pass (front axle and pitch-dependent values)
+  frontAxlePosition: Point2D;
+  forkCompression: number;
+
+  // Dynamics - calculated in second pass (derivatives and derived values)
   leverageRatio: number;
+  wheelRate: number;
   antiSquat: number;
   antiRise: number;
+
+  // Drivetrain - calculated in second pass
   pedalKickback: number;
   chainGrowth: number;
   totalChainGrowth: number;
-  wheelRate: number;
+
+  // Trail - calculated in second pass (depends on pitch rotation)
   trail: number;
+
+  // Crank angle - calculated from pedal kickback
   crankAngle: number;
-  forkCompression: number;
-  pitchAngleDegrees: number;
 }
 
 export interface AnalysisResults {
