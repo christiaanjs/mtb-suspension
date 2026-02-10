@@ -174,13 +174,25 @@ export interface BikeDesign {
 export const computedProperties = {
   frontWheelRadius: (geometry: BikeGeometry) => geometry.frontWheelDiameter / 2,
   rearWheelRadius: (geometry: BikeGeometry) => geometry.rearWheelDiameter / 2,
+  headTubeTop: (geometry: BikeGeometry): Point2D => {
+    return { x: geometry.reach, y: geometry.stack };
+  },
+  headTubeAngleRadians: (geometry: BikeGeometry): number => {
+    return (geometry.headAngle * Math.PI) / 180.0;
+  },
+  headTubeBottom: (geometry: BikeGeometry): Point2D => {
+    const headTubeTop = computedProperties.headTubeTop(geometry);
+    const htaRad = computedProperties.headTubeAngleRadians(geometry);
+    return {
+      x: headTubeTop.x + geometry.headTubeLength * Math.cos(htaRad),
+      y: headTubeTop.y - geometry.headTubeLength * Math.sin(htaRad),
+    };
+  },
   calculateFrontCenter: (geometry: BikeGeometry): number => {
-    const htaRad = (geometry.headAngle * Math.PI) / 180.0;
-    const htTopX = geometry.reach;
-    const htTopY = geometry.stack;
-    const htBottomX = htTopX + geometry.headTubeLength * Math.cos(htaRad);
+    const htaRad = computedProperties.headTubeAngleRadians(geometry);
+    const headTubeBottom = computedProperties.headTubeBottom(geometry);
     const axleX =
-      htBottomX +
+      headTubeBottom.x +
       geometry.forkLength * Math.cos(htaRad) +
       geometry.forkOffset * Math.sin(htaRad);
     return axleX;

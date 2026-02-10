@@ -88,8 +88,7 @@ export default function Home() {
             <AnimationView
               geometry={viewModel.geometry}
               analysisResults={viewModel.analysisResults}
-              travelPercentage={viewModel.currentTravelMM}
-              onTravelChange={(pct) => {}}
+              initialTravelPercentage={viewModel.currentTravelMM}
               isAnimating={isAnimating}
               animationSpeed={viewModel.animationSpeed}
             />

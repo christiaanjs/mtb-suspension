@@ -33,7 +33,7 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
     const travelRatio = shockStroke / geometry.shockStroke;
     const proportionalForkStroke = travelRatio * geometry.forkTravel;
 
-    let state = calculateStateAtShockStroke(
+    const state = calculateStateAtShockStroke(
       shockStroke,
       geometry,
       rigidTriangle,
@@ -43,7 +43,7 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
     state.forkCompression = proportionalForkStroke;
 
     // Recalculate front axle position with proportional fork compression
-    const htaRad = (geometry.headAngle * Math.PI) / 180.0;
+    const htaRad = computedProperties.headTubeAngleRadians(geometry);
     const effectiveForkLength = geometry.forkLength - proportionalForkStroke;
 
     const frontAxlePos: Point2D = {
@@ -106,6 +106,7 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
 function establishRigidTriangle(geometry: BikeGeometry): RigidTriangle {
   const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
 
+  // At top-out: BB is at bbHeight, shock is at shockETE
   const pivot: Point2D = {
     x: geometry.bbToPivotX,
     y: geometry.bbHeight + geometry.bbToPivotY,
@@ -166,10 +167,11 @@ function establishRigidTriangle(geometry: BikeGeometry): RigidTriangle {
       pivotToAxleDist * pivotToAxleDist -
       eyeToAxleDist * eyeToAxleDist) /
     (2 * pivotToEyeDist * pivotToAxleDist);
-  const angleAtPivot = Math.acos(Math.max(-1, Math.min(1, cosAngle)));
+  // const angleAtPivot = Math.acos(Math.max(-1, Math.min(1, cosAngle)));
+  const angleAtPivot = Math.acos(cosAngle);
 
   const pivotToEyeAngle = angle(pivot, chosenEye);
-  const pivotToAxleAngle = angle(pivot, axle);
+  // const pivotToAxleAngle = angle(pivot, axle);
 
   const testAnglePlus = pivotToEyeAngle + angleAtPivot;
   const testAngleMinus = pivotToEyeAngle - angleAtPivot;
@@ -203,7 +205,7 @@ function calculateStateAtShockStroke(
   rigidTriangle: RigidTriangle,
 ): KinematicState {
   const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
-  const frontWheelRadius = computedProperties.frontWheelRadius(geometry);
+  // const frontWheelRadius = computedProperties.frontWheelRadius(geometry);
 
   const eyeToAxleDistance = rigidTriangle.eyeToAxle;
   const currentShockLength = geometry.shockETE - shockStroke;
@@ -291,8 +293,8 @@ function calculateStateAtShockStroke(
   const axle = axle1.x < axle2.x ? axle1 : axle2;
 
   // Calculate lever arm for anti-squat (geometry based)
-  const chainringRadius = (32 * 12.7) / (2 * Math.PI);
-  const cogRadius = (geometry.cogTeeth * 12.7) / (2 * Math.PI);
+  // const chainringRadius = (32 * 12.7) / (2 * Math.PI);
+  // const cogRadius = (geometry.cogTeeth * 12.7) / (2 * Math.PI);
 
   const swingarmAngle = angle(pivot, axle);
   const swingarmVector = {
