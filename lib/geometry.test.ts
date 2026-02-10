@@ -7,6 +7,7 @@ import {
   calculateChainLength,
   sprocketRadius,
   circleCircleIntersection,
+  tangentPoints,
 } from "./geometry";
 import { Point2D } from "./types";
 
@@ -477,5 +478,30 @@ describe("circleCircleIntersection", () => {
     expect(intersections).toHaveLength(2);
     // Points should be symmetric about the line connecting centers
     expect(intersections[0].y).toBeCloseTo(-intersections[1].y, 10);
+  });
+});
+
+describe("tangentPoints", () => {
+  it("returns correct tangent points for horizontally aligned circles of same radius", () => {
+    const center1 = { x: 0, y: 0 };
+    const center2 = { x: 100, y: 0 };
+    const radius = 20;
+    const result = tangentPoints(center1, radius, center2, radius);
+    // The tangent should be above the centers (y negative)
+    expect(result.start.x).toBeCloseTo(center1.x);
+    expect(result.start.y).toBeCloseTo(-radius);
+    expect(result.end.x).toBeCloseTo(center2.x);
+    expect(result.end.y).toBeCloseTo(-radius);
+  });
+
+  it("returns correct tangent points for vertically aligned circles of same radius", () => {
+    const center1 = { x: 0, y: 0 };
+    const center2 = { x: 0, y: 100 };
+    const radius = 20;
+    const result = tangentPoints(center1, radius, center2, radius);
+    expect(result.start.x).toBeCloseTo(radius);
+    expect(result.start.y).toBeCloseTo(center1.y);
+    expect(result.end.x).toBeCloseTo(radius);
+    expect(result.end.y).toBeCloseTo(center2.y);
   });
 });

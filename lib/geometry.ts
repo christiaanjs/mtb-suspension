@@ -118,3 +118,29 @@ export function circleCircleIntersection(
     { x: px - offsetX, y: py - offsetY },
   ];
 }
+
+// Returns the tangent points (upper tangent) between two circles for chainline drawing
+export function tangentPoints(
+  center1: Point2D,
+  radius1: number,
+  center2: Point2D,
+  radius2: number,
+): { start: { x: number; y: number }; end: { x: number; y: number } } {
+  const dx = center2.x - center1.x;
+  const dy = center2.y - center1.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const angle = Math.atan2(dy, dx);
+  const radiusDiff = radius1 - radius2;
+  const tangentAngle = Math.asin(Math.max(-1, Math.min(1, radiusDiff / dist)));
+  const upperAngle = angle + tangentAngle;
+  return {
+    start: {
+      x: center1.x + radius1 * Math.sin(upperAngle),
+      y: center1.y - radius1 * Math.cos(upperAngle),
+    },
+    end: {
+      x: center2.x + radius2 * Math.sin(upperAngle),
+      y: center2.y - radius2 * Math.cos(upperAngle),
+    },
+  };
+}

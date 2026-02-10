@@ -6,8 +6,9 @@ import {
   AnalysisResults,
   computedProperties,
   IdlerType,
+  Point2D,
 } from "@/lib/types";
-import { sprocketRadius } from "@/lib/geometry";
+import { sprocketRadius, tangentPoints } from "@/lib/geometry";
 
 interface VisualizationProps {
   geometry: BikeGeometry;
@@ -36,11 +37,14 @@ export function BikeVisualization({
       Math.max(0, Math.min(stateIndex, analysisResults.states.length - 1))
     ];
 
+  const rearAxleWorld = state.rearAxlePosition;
+  const frontAxleWorld = state.frontAxlePosition;
+
   // Calculate canvas bounds
-  const padding = 100;
+  const padding = 50;
   const scale = 0.3; // pixels per mm
-  const minX = -100;
-  const maxX = 2000;
+  const minX = rearAxleWorld.x - geometry.rearWheelDiameter;
+  const maxX = frontAxleWorld.x + geometry.frontWheelDiameter;
   const minY = 0;
   const maxY = 1200;
 
@@ -52,7 +56,6 @@ export function BikeVisualization({
 
   // Pitch rotation helper - apply rotation around rear axle
   const pitchRad = state.pitchAngleDegrees * (Math.PI / 180);
-  const rearAxleWorld = state.rearAxlePosition;
 
   const applyPitchRotation = (point: { x: number; y: number }) => {
     const dx = point.x - rearAxleWorld.x;
@@ -148,168 +151,158 @@ export function BikeVisualization({
         />
 
         {/* Calculate frame tube endpoints */}
-        {
-          (() => {
-            const seatAngleRad = geometry.seatAngle * (Math.PI / 180);
-            const seatTopWorldX =
-              bbPos.x - geometry.seatTubeLength * Math.cos(seatAngleRad);
-            const seatTopWorldY =
-              bbPos.y + geometry.seatTubeLength * Math.sin(seatAngleRad);
-            const seatTopRotated = applyPitchRotation({
-              x: seatTopWorldX,
-              y: seatTopWorldY,
-            });
+        {(() => {
+          const seatAngleRad = geometry.seatAngle * (Math.PI / 180);
+          const seatTopWorldX =
+            bbPos.x - geometry.seatTubeLength * Math.cos(seatAngleRad);
+          const seatTopWorldY =
+            bbPos.y + geometry.seatTubeLength * Math.sin(seatAngleRad);
+          const seatTopRotated = applyPitchRotation({
+            x: seatTopWorldX,
+            y: seatTopWorldY,
+          });
 
-            // Downtube junction (20mm above head tube bottom in world coords)
-            const downtubeJunctionY = htBottomWorldY + 20;
-            const downtubeJunctionWorldX = htBottomWorldX;
-            const downtubeJunctionRotated = applyPitchRotation({
-              x: downtubeJunctionWorldX,
-              y: downtubeJunctionY,
-            });
+          // Downtube junction (20mm above head tube bottom in world coords)
+          const downtubeJunctionY = htBottomWorldY + 20;
+          const downtubeJunctionWorldX = htBottomWorldX;
+          const downtubeJunctionRotated = applyPitchRotation({
+            x: downtubeJunctionWorldX,
+            y: downtubeJunctionY,
+          });
 
-            return (
-              <>
-                {/* Downtube - BB to head tube junction */}
-                <line
-                  x1={toCanvasX(bbPosRotated.x)}
-                  y1={toCanvasY(bbPosRotated.y)}
-                  x2={toCanvasX(downtubeJunctionRotated.x)}
-                  y2={toCanvasY(downtubeJunctionRotated.y)}
-                  stroke="#2563eb"
-                  strokeWidth="2.67"
-                />
+          return (
+            <>
+              {/* Downtube - BB to head tube junction */}
+              <line
+                x1={toCanvasX(bbPosRotated.x)}
+                y1={toCanvasY(bbPosRotated.y)}
+                x2={toCanvasX(downtubeJunctionRotated.x)}
+                y2={toCanvasY(downtubeJunctionRotated.y)}
+                stroke="#2563eb"
+                strokeWidth="2.67"
+              />
 
-                {/* Head tube */}
-                <line
-                  x1={toCanvasX(htBottomRotated.x)}
-                  y1={toCanvasY(htBottomRotated.y)}
-                  x2={toCanvasX(htTopRotated.x)}
-                  y2={toCanvasY(htTopRotated.y)}
-                  stroke="#2563eb"
-                  strokeWidth="2.67"
-                />
+              {/* Head tube */}
+              <line
+                x1={toCanvasX(htBottomRotated.x)}
+                y1={toCanvasY(htBottomRotated.y)}
+                x2={toCanvasX(htTopRotated.x)}
+                y2={toCanvasY(htTopRotated.y)}
+                stroke="#2563eb"
+                strokeWidth="2.67"
+              />
 
-                {/* Seat tube - BB to seat top */}
-                <line
-                  x1={toCanvasX(bbPosRotated.x)}
-                  y1={toCanvasY(bbPosRotated.y)}
-                  x2={toCanvasX(seatTopRotated.x)}
-                  y2={toCanvasY(seatTopRotated.y)}
-                  stroke="#2563eb"
-                  strokeWidth="2.67"
-                />
+              {/* Seat tube - BB to seat top */}
+              <line
+                x1={toCanvasX(bbPosRotated.x)}
+                y1={toCanvasY(bbPosRotated.y)}
+                x2={toCanvasX(seatTopRotated.x)}
+                y2={toCanvasY(seatTopRotated.y)}
+                stroke="#2563eb"
+                strokeWidth="2.67"
+              />
 
-                {/* Top tube - head tube top to seat top */}
-                <line
-                  x1={toCanvasX(htTopRotated.x)}
-                  y1={toCanvasY(htTopRotated.y)}
-                  x2={toCanvasX(seatTopRotated.x)}
-                  y2={toCanvasY(seatTopRotated.y)}
-                  stroke="#2563eb"
-                  strokeWidth="1.33"
-                />
-              </>
-            );
-          })()
-        }
+              {/* Top tube - head tube top to seat top */}
+              <line
+                x1={toCanvasX(htTopRotated.x)}
+                y1={toCanvasY(htTopRotated.y)}
+                x2={toCanvasX(seatTopRotated.x)}
+                y2={toCanvasY(seatTopRotated.y)}
+                stroke="#2563eb"
+                strokeWidth="1.33"
+              />
+            </>
+          );
+        })()}
 
-        {
-          /* Fork stanchions and lower legs */
-        }
-        {
-          (() => {
-            // Fork bend point (end of stanchions along steering axis)
-            const forkBendWorldX = htBottomWorldX + effectiveForkLength * cosHT;
-            const forkBendWorldY = htBottomWorldY - effectiveForkLength * sinHT;
-            const forkBendRotated = applyPitchRotation({
-              x: forkBendWorldX,
-              y: forkBendWorldY,
-            });
+        {/* Fork stanchions and lower legs */}
+        {(() => {
+          // Fork bend point (end of stanchions along steering axis)
+          const forkBendWorldX = htBottomWorldX + effectiveForkLength * cosHT;
+          const forkBendWorldY = htBottomWorldY - effectiveForkLength * sinHT;
+          const forkBendRotated = applyPitchRotation({
+            x: forkBendWorldX,
+            y: forkBendWorldY,
+          });
 
-            return (
-              <>
-                {/* Fork stanchions */}
-                <line
-                  x1={toCanvasX(htBottomRotated.x)}
-                  y1={toCanvasY(htBottomRotated.y)}
-                  x2={toCanvasX(forkBendRotated.x)}
-                  y2={toCanvasY(forkBendRotated.y)}
-                  stroke="#22c55e"
-                  strokeWidth="2.67"
-                />
+          return (
+            <>
+              {/* Fork stanchions */}
+              <line
+                x1={toCanvasX(htBottomRotated.x)}
+                y1={toCanvasY(htBottomRotated.y)}
+                x2={toCanvasX(forkBendRotated.x)}
+                y2={toCanvasY(forkBendRotated.y)}
+                stroke="#22c55e"
+                strokeWidth="2.67"
+              />
 
-                {/* Fork lower legs */}
-                <line
-                  x1={toCanvasX(forkBendRotated.x)}
-                  y1={toCanvasY(forkBendRotated.y)}
-                  x2={toCanvasX(frontAxleRotated.x)}
-                  y2={toCanvasY(frontAxleRotated.y)}
-                  stroke="#22c55e"
-                  strokeWidth="2.67"
-                />
-              </>
-            );
-          })()
-        }
+              {/* Fork lower legs */}
+              <line
+                x1={toCanvasX(forkBendRotated.x)}
+                y1={toCanvasY(forkBendRotated.y)}
+                x2={toCanvasX(frontAxleRotated.x)}
+                y2={toCanvasY(frontAxleRotated.y)}
+                stroke="#22c55e"
+                strokeWidth="2.67"
+              />
+            </>
+          );
+        })()}
 
-        {
-          /* Swingarm triangle - pivot, eye, axle (orange) */
-        }
-        {
-          (() => {
-            const frameMountRotated = applyPitchRotation({
-              x: bbPos.x + geometry.shockFrameMountX,
-              y: bbPos.y + geometry.shockFrameMountY,
-            });
+        {/* Swingarm triangle - pivot, eye, axle (orange) */}
+        {(() => {
+          const frameMountRotated = applyPitchRotation({
+            x: bbPos.x + geometry.shockFrameMountX,
+            y: bbPos.y + geometry.shockFrameMountY,
+          });
 
-            return (
-              <>
-                {/* Swingarm outline - pivot to eye to axle */}
-                <polyline
-                  points={`${toCanvasX(pivotPosRotated.x)},${toCanvasY(pivotPosRotated.y)} ${toCanvasX(shockEyePosRotated.x)},${toCanvasY(shockEyePosRotated.y)} ${toCanvasX(rearAxlePosRotated.x)},${toCanvasY(rearAxlePosRotated.y)} ${toCanvasX(pivotPosRotated.x)},${toCanvasY(pivotPosRotated.y)}`}
-                  fill="none"
-                  stroke="#f97316"
-                  strokeWidth="1.33"
-                />
+          return (
+            <>
+              {/* Swingarm outline - pivot to eye to axle */}
+              <polyline
+                points={`${toCanvasX(pivotPosRotated.x)},${toCanvasY(pivotPosRotated.y)} ${toCanvasX(shockEyePosRotated.x)},${toCanvasY(shockEyePosRotated.y)} ${toCanvasX(rearAxlePosRotated.x)},${toCanvasY(rearAxlePosRotated.y)} ${toCanvasX(pivotPosRotated.x)},${toCanvasY(pivotPosRotated.y)}`}
+                fill="none"
+                stroke="#f97316"
+                strokeWidth="1.33"
+              />
 
-                {/* Shock linkage - frame mount to eye */}
-                <line
-                  x1={toCanvasX(frameMountRotated.x)}
-                  y1={toCanvasY(frameMountRotated.y)}
-                  x2={toCanvasX(shockEyePosRotated.x)}
-                  y2={toCanvasY(shockEyePosRotated.y)}
-                  stroke="#ef4444"
-                  strokeWidth="1.33"
-                />
+              {/* Shock linkage - frame mount to eye */}
+              <line
+                x1={toCanvasX(frameMountRotated.x)}
+                y1={toCanvasY(frameMountRotated.y)}
+                x2={toCanvasX(shockEyePosRotated.x)}
+                y2={toCanvasY(shockEyePosRotated.y)}
+                stroke="#ef4444"
+                strokeWidth="1.33"
+              />
 
-                {/* Shock mount points - eyes */}
-                <circle
-                  cx={toCanvasX(frameMountRotated.x)}
-                  cy={toCanvasY(frameMountRotated.y)}
-                  r={5}
-                  fill="#ef4444"
-                />
-                <circle
-                  cx={toCanvasX(shockEyePosRotated.x)}
-                  cy={toCanvasY(shockEyePosRotated.y)}
-                  r={5}
-                  fill="#ef4444"
-                />
+              {/* Shock mount points - eyes */}
+              <circle
+                cx={toCanvasX(frameMountRotated.x)}
+                cy={toCanvasY(frameMountRotated.y)}
+                r={5}
+                fill="#ef4444"
+              />
+              <circle
+                cx={toCanvasX(shockEyePosRotated.x)}
+                cy={toCanvasY(shockEyePosRotated.y)}
+                r={5}
+                fill="#ef4444"
+              />
 
-                {/* Pivot point - hollow yellow circle */}
-                <circle
-                  cx={toCanvasX(pivotPosRotated.x)}
-                  cy={toCanvasY(pivotPosRotated.y)}
-                  r={6}
-                  fill="none"
-                  stroke="#eab308"
-                  strokeWidth="1.33"
-                />
-              </>
-            );
-          })()
-        }
+              {/* Pivot point - hollow yellow circle */}
+              <circle
+                cx={toCanvasX(pivotPosRotated.x)}
+                cy={toCanvasY(pivotPosRotated.y)}
+                r={6}
+                fill="none"
+                stroke="#eab308"
+                strokeWidth="1.33"
+              />
+            </>
+          );
+        })()}
 
         {/* Front wheel */}
         <circle
@@ -339,59 +332,92 @@ export function BikeVisualization({
           };
           const chainringRotated = applyPitchRotation(chainringPos);
           const cogRotated = rearAxlePosRotated;
-
           const chainringRadius = sprocketRadius(geometry.chainringTeeth);
           const cogRadius = sprocketRadius(geometry.cogTeeth);
 
           const chainringRadiusScreen = chainringRadius * scale;
           const cogRadiusScreen = cogRadius * scale;
 
-          // Helper to calculate chain tangent points
-          const calculateTangentPoints = (
-            center1: { x: number; y: number },
-            radius1: number,
-            center2: { x: number; y: number },
-            radius2: number,
-          ) => {
-            const dx = center2.x - center1.x;
-            const dy = center2.y - center1.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            const angle = Math.atan2(dy, dx);
+          const chainSegments: { start: Point2D; end: Point2D }[] = [];
 
-            const radiusDiff = radius1 - radius2;
-            const tangentAngle = Math.asin(
-              Math.max(-1, Math.min(1, radiusDiff / dist)),
+          let idlerRotated: Point2D | null = null;
+          let idlerRadiusScreen = 0;
+
+          if (geometry.idlerType === IdlerType.None) {
+            // Chainring to cog
+            const tangents = tangentPoints(
+              chainringRotated,
+              chainringRadius,
+              cogRotated,
+              cogRadius,
             );
-
-            const upperAngle = angle + tangentAngle;
-            const lowerAngle = angle - tangentAngle + Math.PI;
-
-            return {
-              upper1: {
-                x: center1.x + radius1 * Math.sin(upperAngle),
-                y: center1.y - radius1 * Math.cos(upperAngle),
-              },
-              upper2: {
-                x: center2.x + radius2 * Math.sin(upperAngle),
-                y: center2.y - radius2 * Math.cos(upperAngle),
-              },
-              lower1: {
-                x: center1.x + radius1 * Math.sin(lowerAngle),
-                y: center1.y - radius1 * Math.cos(lowerAngle),
-              },
-              lower2: {
-                x: center2.x + radius2 * Math.sin(lowerAngle),
-                y: center2.y - radius2 * Math.cos(lowerAngle),
-              },
+            chainSegments.push(tangents)
+          } else {
+            if (geometry.idlerType === IdlerType.FrameMounted) {
+            // Idler to cog
+            const idlerPos = {
+              x: bbPos.x + geometry.idlerX,
+              y: bbPos.y + geometry.idlerY,
             };
-          };
+            idlerRotated = applyPitchRotation(idlerPos);
+          } else {
+            // Swingarm-mounted idler: chainring to idler
+            const topOutIdlerX = geometry.idlerX - geometry.bbToPivotX;
+            const topOutIdlerY =
+              geometry.bbHeight +
+              geometry.idlerY -
+              (geometry.bbHeight + geometry.bbToPivotY);
+            const topOutPivot = {
+              x: geometry.bbToPivotX,
+              y: geometry.bbHeight + geometry.bbToPivotY,
+            };
+            const topOutVertDist =
+              geometry.rearWheelDiameter / 2 - topOutPivot.y;
+            const topOutHorizDist = Math.sqrt(
+              geometry.swingarmLength * geometry.swingarmLength -
+                topOutVertDist * topOutVertDist,
+            );
+            const topOutSwingarmAngle = Math.atan2(
+              0 - topOutPivot.y,
+              topOutPivot.x - topOutHorizDist - topOutPivot.x,
+            );
+            const currentSwingarmAngle = Math.atan2(
+              pivotPos.y - state.rearAxlePosition.y,
+              pivotPos.x - state.rearAxlePosition.x,
+            );
+            const rotationAngle = currentSwingarmAngle - topOutSwingarmAngle;
+            const rotatedOffsetX =
+              topOutIdlerX * Math.cos(rotationAngle) -
+              topOutIdlerY * Math.sin(rotationAngle);
+            const rotatedOffsetY =
+              topOutIdlerX * Math.sin(rotationAngle) +
+              topOutIdlerY * Math.cos(rotationAngle);
+            const idlerPos = {
+              x: pivotPos.x + rotatedOffsetX,
+              y: pivotPos.y + rotatedOffsetY,
+            };
+            idlerRotated = applyPitchRotation(idlerPos);
+          }
 
-          const tangents = calculateTangentPoints(
-            chainringRotated,
-            chainringRadius * scale,
-            cogRotated,
-            cogRadius * scale,
-          );
+            const idlerRadius = sprocketRadius(geometry.idlerTeeth);
+            idlerRadiusScreen = idlerRadius * scale;
+
+            const cogToIdler = tangentPoints(
+              idlerRotated,
+              idlerRadius,
+              cogRotated,
+              cogRadius,
+            );
+            chainSegments.push(cogToIdler)
+
+            const chainringToIdler = tangentPoints(
+              chainringRotated,
+              chainringRadius,
+              idlerRotated,
+              idlerRadius,
+            );
+            chainSegments.push(chainringToIdler)
+          }
 
           return (
             <>
@@ -404,7 +430,6 @@ export function BikeVisualization({
                 stroke="#eab308"
                 strokeWidth="1.33"
               />
-
               {/* Cog */}
               <circle
                 cx={toCanvasX(cogRotated.x)}
@@ -414,116 +439,38 @@ export function BikeVisualization({
                 stroke="#eab308"
                 strokeWidth="1.33"
               />
-
-              {/* Chain upper run (tension side) */}
-              <line
-                x1={tangents.upper1.x}
-                y1={tangents.upper1.y}
-                x2={tangents.upper2.x}
-                y2={tangents.upper2.y}
+              {/* Idler pulley (if present) */}
+              {idlerRotated && (
+                <circle
+                  cx={toCanvasX(idlerRotated.x)}
+                  cy={toCanvasY(idlerRotated.y)}
+                  r={idlerRadiusScreen}
+                  fill="none"
+                  stroke="#f97316"
+                  strokeWidth="1.33"
+                />
+              )}
+              {/* Chainline */}
+              {chainSegments.map((segment, index) => <line
+                x1={toCanvasX(segment.start.x)}
+                y1={toCanvasY(segment.start.y)}
+                x2={toCanvasX(segment.end.x)}
+                y2={toCanvasY(segment.end.y)}
                 stroke="#eab308"
-                strokeWidth="1"
-                opacity="0.7"
-              />
-
-              {/* Chain lower run (return side) */}
-              <line
-                x1={tangents.lower1.x}
-                y1={tangents.lower1.y}
-                x2={tangents.lower2.x}
-                y2={tangents.lower2.y}
-                stroke="#eab308"
-                strokeWidth="1"
-                opacity="0.7"
-              />
-
-              {/* Idler (if configured) */}
-              {geometry.idlerType !== IdlerType.None &&
-                (() => {
-                  let idlerPos: { x: number; y: number };
-
-                  if (geometry.idlerType === IdlerType.FrameMounted) {
-                    // Frame mounted idler - position relative to BB
-                    idlerPos = {
-                      x: bbPos.x + geometry.idlerX,
-                      y: bbPos.y + geometry.idlerY,
-                    };
-                  } else {
-                    // Swingarm mounted idler - rotates with swingarm
-                    const topOutIdlerX = geometry.idlerX - geometry.bbToPivotX;
-                    const topOutIdlerY =
-                      geometry.bbHeight +
-                      geometry.idlerY -
-                      (geometry.bbHeight + geometry.bbToPivotY);
-
-                    // Top-out swingarm angle
-                    const topOutPivot = {
-                      x: geometry.bbToPivotX,
-                      y: geometry.bbHeight + geometry.bbToPivotY,
-                    };
-                    const topOutVertDist =
-                      geometry.rearWheelDiameter / 2 - topOutPivot.y;
-                    const topOutHorizDist = Math.sqrt(
-                      geometry.swingarmLength * geometry.swingarmLength -
-                        topOutVertDist * topOutVertDist,
-                    );
-                    const topOutSwingarmAngle = Math.atan2(
-                      0 - topOutPivot.y,
-                      topOutPivot.x - topOutHorizDist - topOutPivot.x,
-                    );
-
-                    // Current swingarm angle
-                    const currentSwingarmAngle = Math.atan2(
-                      pivotPos.y - state.rearAxlePosition.y,
-                      pivotPos.x - state.rearAxlePosition.x,
-                    );
-
-                    // Rotation angle
-                    const rotationAngle =
-                      currentSwingarmAngle - topOutSwingarmAngle;
-                    const rotatedOffsetX =
-                      topOutIdlerX * Math.cos(rotationAngle) -
-                      topOutIdlerY * Math.sin(rotationAngle);
-                    const rotatedOffsetY =
-                      topOutIdlerX * Math.sin(rotationAngle) +
-                      topOutIdlerY * Math.cos(rotationAngle);
-
-                    idlerPos = {
-                      x: pivotPos.x + rotatedOffsetX,
-                      y: pivotPos.y + rotatedOffsetY,
-                    };
-                  }
-
-                  const idlerRotated = applyPitchRotation(idlerPos);
-                  const idlerRadius = sprocketRadius(geometry.idlerTeeth);
-                  const idlerRadiusScreen = idlerRadius * scale;
-
-                  return (
-                    <>
-                      {/* Idler pulley */}
-                      <circle
-                        cx={toCanvasX(idlerRotated.x)}
-                        cy={toCanvasY(idlerRotated.y)}
-                        r={idlerRadiusScreen}
-                        fill="none"
-                        stroke="#f97316"
-                        strokeWidth="1.33"
-                      />
-                    </>
-                  );
-                })()}
-
+                strokeWidth="2"
+                opacity="0.9"
+                key={index}
+              />)}
+              
               {/* Crank arm and pedal */}
               {(() => {
                 const crankLength = 165.0; // 165mm standard crank
                 const crankAngleRad = state.crankAngle * (Math.PI / 180);
-
                 const crankEndWorld = {
                   x: chainringPos.x + crankLength * Math.cos(crankAngleRad),
                   y: chainringPos.y - crankLength * Math.sin(crankAngleRad),
                 };
                 const crankEndRotated = applyPitchRotation(crankEndWorld);
-
                 return (
                   <>
                     {/* Crank arm */}
@@ -547,7 +494,7 @@ export function BikeVisualization({
                 );
               })()}
             </>
-          );
+          )
         })()}
 
         {/* BB (bottom bracket) */}
@@ -764,7 +711,7 @@ export function BikeVisualization({
         {/* Labels and pitch indicator */}
         <text
           x={padding + 10}
-          y={20}
+          y={30}
           fontSize="14"
           fontWeight="bold"
           fill="#1f2937"
@@ -778,7 +725,7 @@ export function BikeVisualization({
         {/* Pitch angle indicator */}
         <text
           x={padding + 10}
-          y={40}
+          y={50}
           fontSize="12"
           fill="#666"
           className="dark:fill-gray-400"
