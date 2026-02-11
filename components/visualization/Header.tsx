@@ -1,4 +1,21 @@
 import { DrawComponentProps } from "./types";
+import { KinematicState } from "@/lib/types";
+
+type NumericKeys<T> = {
+  [K in keyof T]: T[K] extends number ? K : never;
+}[keyof T];
+
+const metricLabelDpUnit: [
+  NumericKeys<KinematicState>,
+  string,
+  number,
+  string,
+][] = [
+  ["travelMM", "Travel", 1, " mm"],
+  ["leverageRatio", "LR", 2, ""],
+  //   ["antiSquat", "AS", 0, "%"],
+  //   ["antiRise", "AR", 0, "%"],
+];
 
 export const Header = ({
   conversion: { padding },
@@ -13,9 +30,12 @@ export const Header = ({
       fill="#1f2937"
       className="dark:fill-white"
     >
-      Travel: {state.travelMM.toFixed(1)} mm | LR:{" "}
-      {state.leverageRatio.toFixed(2)} | AS: {state.antiSquat.toFixed(0)}% | AR:{" "}
-      {state.antiRise.toFixed(0)}%
+      {metricLabelDpUnit
+        .map(
+          ([key, label, dp, unit]) =>
+            `${label}: ${state[key].toFixed(dp)}${unit}`,
+        )
+        .join(" | ")}
     </text>
     {/* Pitch angle indicator */}
     <text
