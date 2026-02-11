@@ -50,11 +50,13 @@ export function BikeVisualization({
 
   // Calculate canvas bounds
   const padding = 50;
-  const scale = 0.3; // pixels per mm
+  const scale = 0.275; // pixels per mm
   const minX = rearAxleWorld.x - geometry.rearWheelDiameter;
   const maxX = frontAxleWorld.x + geometry.frontWheelDiameter;
   const minY = 0;
-  const maxY = 1200;
+
+  // TODO: Do this properly by finding the min/max of all components across all states, not just the CoM in the current state
+  const maxY = geometry.comY + geometry.bbHeight;
 
   const bounds: VisualizationBounds = {
     minX,
@@ -75,7 +77,7 @@ export function BikeVisualization({
   };
 
   return (
-    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-black overflow-auto">
+    <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-black overflow-auto">
       <svg
         width={width}
         height={height}

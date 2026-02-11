@@ -5,6 +5,7 @@ import { useBikeViewModel } from "@/hooks/useBikeViewModel";
 import { InputPanel } from "@/components/InputPanel";
 import { AnimationView } from "@/components/Visualization";
 import { GraphPanel } from "@/components/Graphs";
+import { Attribution } from "@/components/Attribution";
 
 export default function Home() {
   const viewModel = useBikeViewModel();
@@ -33,6 +34,7 @@ export default function Home() {
               className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               placeholder="Design name"
             />
+            <Attribution />
           </div>
           <div className="flex items-center gap-2">
             <label className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer text-sm font-medium">
@@ -85,31 +87,6 @@ export default function Home() {
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Visualization */}
           <div className="flex-1 overflow-hidden">
-            {/* Attribution section */}
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-gray-500 dark:text-gray-400">
-                Based on{" "}
-                <a
-                  href="https://github.com/patcroris/MTB-suspension-App"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-blue-600"
-                >
-                  work by Pat Crowe-Rishworth
-                </a>
-              </span>
-              <span className="text-gray-500 dark:text-gray-400">
-                |{" "}
-                <a
-                  href="https://github.com/christiaanjs/mtb-suspension"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-blue-600"
-                >
-                  Source code
-                </a>
-              </span>
-            </div>
             <AnimationView
               geometry={viewModel.geometry}
               analysisResults={viewModel.analysisResults}
