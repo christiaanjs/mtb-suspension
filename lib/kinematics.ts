@@ -145,6 +145,8 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
     state.antiSquat = calculateVisualAntiSquat(state, geometry);
     state.antiRise = calculateVisualAntiRise(state, geometry);
 
+    state.trail = computeTrail(state, geometry);
+
     states.push(state);
 
     // Store wheel positions relative to BB
@@ -445,6 +447,36 @@ function calculateVisualAntiRise(
 ): number {
   // Anti-rise is opposite to anti-squat
   return 100 - calculateVisualAntiSquat(state, geometry);
+}
+
+function computeTrail(state: KinematicState, geometry: BikeGeometry): number {
+  // Calculate perpendicular distance from contact patch to head tube line (in screen/pitch-rotated space)
+  const contactPatch = { x: state.frontAxlePosition.x, y: 0 };
+  const applyPitchRotation = getApplyPitchRotation(
+    state.rearAxlePosition,
+    state.pitchAngleDegrees,
+  );
+
+  const headtubeTop = computedProperties.headTubeTop(
+    geometry,
+    state.bbPosition,
+  );
+  const headtubeBottom = computedProperties.headTubeBottom(
+    geometry,
+    state.bbPosition,
+  );
+  const htTopRotated = applyPitchRotation(headtubeTop);
+  const htBottomRotated = applyPitchRotation(headtubeBottom);
+
+  const htVector = Point2D.subtract(htBottomRotated, htTopRotated);
+  const numerator = Math.abs(
+    htVector.y * (contactPatch.x - htTopRotated.x) -
+      htVector.x * (contactPatch.y - htTopRotated.y),
+  );
+  const denominator = Math.sqrt(
+    htVector.x * htVector.x + htVector.y * htVector.y,
+  );
+  return numerator / denominator;
 }
 
 export const getApplyPitchRotation =
