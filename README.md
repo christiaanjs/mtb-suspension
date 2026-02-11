@@ -1,6 +1,6 @@
-# MTB Suspension Analyzer - Web Port
+# MTB Suspension Kinematics - Web app
 
-A complete web-based port of the MTB Suspension analysis application, originally built in Swift for macOS. This version is built with **Next.js 16**, **React 19**, and **TypeScript**, providing full cross-platform compatibility.
+Based on [work by Pat Crowe-Rishworth](https://github.com/patcroris/MTB-suspension-App)
 
 ## Features
 
@@ -157,24 +157,6 @@ The core of the application, providing:
 - Shows current position indicator on each graph
 - Responsive to travel percentage changes
 
-## Porting Notes
-
-This is a faithful port of the Swift/SwiftUI application with the following improvements:
-
-- **Cross-platform**: Runs on any OS with a modern browser
-- **Responsive Design**: Works on desktop, tablet, and large screen displays
-- **Dark Mode Support**: Automatic dark theme based on system preferences
-- **Better Performance**: GPU-accelerated SVG rendering
-- **Standard Web Stack**: Easier to deploy and maintain
-
-### Key Differences from Swift Version
-
-1. All kinematic calculations ported to TypeScript and JavaScript
-2. SwiftUI views converted to React functional components
-3. macOS-specific features (file saving via NSSavePanel) converted to web APIs
-4. State management via React hooks instead of SwiftUI's @ObservedObject
-5. SVG rendering instead of SwiftUI's Canvas
-
 ## Browser Support
 
 - Chrome/Edge 90+
@@ -197,39 +179,6 @@ npm run lint   # Check TypeScript and ESLint
 - ESLint configuration via Next.js
 - Tailwind CSS for all styling
 
-## Deployment
-
-This app can be deployed to:
-
-- **Vercel** (recommended, optimized for Next.js)
-- **Netlify**
-- **AWS Amplify**
-- Any Node.js hosting provider
-
-Example Vercel deployment:
-
-```bash
-npm install -g vercel
-vercel
-```
-
 ## License
 
 AGPL-3.0 - See LICENSE file for details
-
-## Credits
-
-Original Swift application by Patrick Crowe Rishworth
-Web port and React/Next.js implementation using modern JavaScript tooling
-
-## Future Enhancements
-
-Potential improvements for future versions:
-
-- [ ] 3D visualization with Three.js
-- [ ] Multi-bike comparison
-- [ ] Export to CAD formats
-- [ ] Suspension animation recording/GIF export
-- [ ] Sensitivity analysis tools
-- [ ] Mobile-optimized touch interface
-- [ ] Database integration for design library
