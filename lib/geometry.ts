@@ -1,6 +1,10 @@
 // Geometric utility functions
 import { Point2D } from "./types";
 
+export function degreesToRadians(degrees: number): number {
+  return (degrees * Math.PI) / 180;
+}
+
 export function distance(p1: Point2D, p2: Point2D): number {
   const dx = p2.x - p1.x;
   const dy = p2.y - p1.y;
@@ -144,3 +148,4 @@ export function tangentPoints(
     },
   };
 }
+

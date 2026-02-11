@@ -1,6 +1,8 @@
 // MTB Suspension Analyzer Types
 // Ported from Swift app
 
+import { degreesToRadians } from "./geometry";
+
 export interface Point2D {
   x: number;
   y: number;
@@ -188,14 +190,20 @@ export interface BikeDesign {
 export const computedProperties = {
   frontWheelRadius: (geometry: BikeGeometry) => geometry.frontWheelDiameter / 2,
   rearWheelRadius: (geometry: BikeGeometry) => geometry.rearWheelDiameter / 2,
-  headTubeTop: (geometry: BikeGeometry): Point2D => {
-    return { x: geometry.reach, y: geometry.stack };
+  headTubeTop: (
+    geometry: BikeGeometry,
+    bb: Point2D = { x: 0, y: 0 },
+  ): Point2D => {
+    return { x: bb.x + geometry.reach, y: bb.y + geometry.stack };
   },
   headTubeAngleRadians: (geometry: BikeGeometry): number => {
-    return (geometry.headAngle * Math.PI) / 180.0;
+    return degreesToRadians(geometry.headAngle);
   },
-  headTubeBottom: (geometry: BikeGeometry): Point2D => {
-    const headTubeTop = computedProperties.headTubeTop(geometry);
+  headTubeBottom: (
+    geometry: BikeGeometry,
+    bb: Point2D = { x: 0, y: 0 },
+  ): Point2D => {
+    const headTubeTop = computedProperties.headTubeTop(geometry, bb);
     const htaRad = computedProperties.headTubeAngleRadians(geometry);
     return {
       x: headTubeTop.x + geometry.headTubeLength * Math.cos(htaRad),
@@ -211,4 +219,51 @@ export const computedProperties = {
       geometry.forkOffset * Math.sin(htaRad);
     return axleX;
   },
+};
+
+export interface VisualizationBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  padding: number;
+  scale: number;
+}
+
+export interface BoundsConversions {
+  scale: number;
+  width: number;
+  height: number;
+  toCanvas: (point: Point2D) => Point2D;
+  toCanvasX: (x: number) => number;
+  toCanvasY: (y: number) => number;
+}
+
+export const getScreenConversions = (
+  bounds: VisualizationBounds,
+): BoundsConversions => {
+  const { minX, maxX, minY, maxY, padding, scale } = bounds;
+
+  const width = (maxX - minX) * scale + padding * 2;
+  const height = (maxY - minY) * scale + padding * 2;
+
+  const toCanvasX = (x: number): number => {
+    return (x - minX) * scale + padding;
+  };
+
+  const toCanvasY = (y: number): number => {
+    return height - ((y - minY) * scale + padding);
+  };
+
+  return {
+    scale,
+    width,
+    height,
+    toCanvas: (point: Point2D): Point2D => ({
+      x: toCanvasX(point.x),
+      y: toCanvasY(point.y),
+    }),
+    toCanvasX: toCanvasX,
+    toCanvasY: toCanvasY,
+  };
 };

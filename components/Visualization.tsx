@@ -7,8 +7,16 @@ import {
   computedProperties,
   IdlerType,
   Point2D,
+  VisualizationBounds,
+  getScreenConversions,
 } from "@/lib/types";
 import { sprocketRadius, tangentPoints } from "@/lib/geometry";
+import { GroundLine } from "./visualization/GroundLine";
+import { getApplyPitchRotation } from "@/lib/kinematics";
+import { FrontTriangle } from "./visualization/FrontTriangle";
+import { Swingarm } from "./visualization/Swingarm";
+import { Fork } from "./visualization/Fork";
+import { Wheels } from "./visualization/Wheels";
 
 interface VisualizationProps {
   geometry: BikeGeometry;
@@ -48,25 +56,24 @@ export function BikeVisualization({
   const minY = 0;
   const maxY = 1200;
 
-  const width = (maxX - minX) * scale + padding * 2;
-  const height = (maxY - minY) * scale + padding * 2;
-
-  const toCanvasX = (x: number) => (x - minX) * scale + padding;
-  const toCanvasY = (y: number) => height - ((y - minY) * scale + padding);
-
-  // Pitch rotation helper - apply rotation around rear axle
-  const pitchRad = state.pitchAngleDegrees * (Math.PI / 180);
-
-  const applyPitchRotation = (point: { x: number; y: number }) => {
-    const dx = point.x - rearAxleWorld.x;
-    const dy = point.y - rearAxleWorld.y;
-    const cosA = Math.cos(-pitchRad);
-    const sinA = Math.sin(-pitchRad);
-    return {
-      x: rearAxleWorld.x + dx * cosA - dy * sinA,
-      y: rearAxleWorld.y + dx * sinA + dy * cosA,
-    };
+  const bounds: VisualizationBounds = {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    padding,
+    scale,
   };
+
+  const screenConversions = getScreenConversions(bounds);
+
+  const { toCanvasX, toCanvasY, width, height } = screenConversions;
+  
+
+  const applyPitchRotation = getApplyPitchRotation(
+    state.rearAxlePosition,
+    state.pitchAngleDegrees,
+  );
 
   // Get current positions (world coordinates)
   const bbPos = state.bbPosition;
@@ -100,11 +107,7 @@ export function BikeVisualization({
     x: frontAxleCalculatedX,
     y: frontAxleCalculatedY,
   });
-  const htTopRotated = applyPitchRotation({ x: htTopWorldX, y: htTopWorldY });
-  const htBottomRotated = applyPitchRotation({
-    x: htBottomWorldX,
-    y: htBottomWorldY,
-  });
+
   const pivotPosRotated = applyPitchRotation(pivotPos);
   const shockEyePosRotated = applyPitchRotation(shockEyePos);
   const comRotated = applyPitchRotation({
@@ -138,119 +141,24 @@ export function BikeVisualization({
         </defs>
         <rect width={width} height={height} fill="url(#grid)" />
 
-        {/* Ground line */}
-        <line
-          x1={toCanvasX(minX)}
-          y1={toCanvasY(rearWheelRadius)}
-          x2={toCanvasX(maxX)}
-          y2={toCanvasY(rearWheelRadius)}
-          stroke="#999"
-          strokeWidth="1"
-          strokeDasharray="5,5"
-          opacity="0.5"
+        <GroundLine conversions={screenConversions} geometry={geometry} />
+        <FrontTriangle
+          state={state}
+          geometry={geometry}
+          conversion={screenConversions}
+        />
+        <Swingarm state={state} conversion={screenConversions} />
+        <Fork
+          state={state}
+          geometry={geometry}
+          conversion={screenConversions}
+        />
+        <Wheels
+          state={state}
+          geometry={geometry}
+          conversion={screenConversions}
         />
 
-        {/* Calculate frame tube endpoints */}
-        {(() => {
-          const seatAngleRad = geometry.seatAngle * (Math.PI / 180);
-          const seatTopWorldX =
-            bbPos.x - geometry.seatTubeLength * Math.cos(seatAngleRad);
-          const seatTopWorldY =
-            bbPos.y + geometry.seatTubeLength * Math.sin(seatAngleRad);
-          const seatTopRotated = applyPitchRotation({
-            x: seatTopWorldX,
-            y: seatTopWorldY,
-          });
-
-          // Downtube junction (20mm above head tube bottom in world coords)
-          const downtubeJunctionY = htBottomWorldY + 20;
-          const downtubeJunctionWorldX = htBottomWorldX;
-          const downtubeJunctionRotated = applyPitchRotation({
-            x: downtubeJunctionWorldX,
-            y: downtubeJunctionY,
-          });
-
-          return (
-            <>
-              {/* Downtube - BB to head tube junction */}
-              <line
-                x1={toCanvasX(bbPosRotated.x)}
-                y1={toCanvasY(bbPosRotated.y)}
-                x2={toCanvasX(downtubeJunctionRotated.x)}
-                y2={toCanvasY(downtubeJunctionRotated.y)}
-                stroke="#2563eb"
-                strokeWidth="2.67"
-              />
-
-              {/* Head tube */}
-              <line
-                x1={toCanvasX(htBottomRotated.x)}
-                y1={toCanvasY(htBottomRotated.y)}
-                x2={toCanvasX(htTopRotated.x)}
-                y2={toCanvasY(htTopRotated.y)}
-                stroke="#2563eb"
-                strokeWidth="2.67"
-              />
-
-              {/* Seat tube - BB to seat top */}
-              <line
-                x1={toCanvasX(bbPosRotated.x)}
-                y1={toCanvasY(bbPosRotated.y)}
-                x2={toCanvasX(seatTopRotated.x)}
-                y2={toCanvasY(seatTopRotated.y)}
-                stroke="#2563eb"
-                strokeWidth="2.67"
-              />
-
-              {/* Top tube - head tube top to seat top */}
-              <line
-                x1={toCanvasX(htTopRotated.x)}
-                y1={toCanvasY(htTopRotated.y)}
-                x2={toCanvasX(seatTopRotated.x)}
-                y2={toCanvasY(seatTopRotated.y)}
-                stroke="#2563eb"
-                strokeWidth="1.33"
-              />
-            </>
-          );
-        })()}
-
-        {/* Fork stanchions and lower legs */}
-        {(() => {
-          // Fork bend point (end of stanchions along steering axis)
-          const forkBendWorldX = htBottomWorldX + effectiveForkLength * cosHT;
-          const forkBendWorldY = htBottomWorldY - effectiveForkLength * sinHT;
-          const forkBendRotated = applyPitchRotation({
-            x: forkBendWorldX,
-            y: forkBendWorldY,
-          });
-
-          return (
-            <>
-              {/* Fork stanchions */}
-              <line
-                x1={toCanvasX(htBottomRotated.x)}
-                y1={toCanvasY(htBottomRotated.y)}
-                x2={toCanvasX(forkBendRotated.x)}
-                y2={toCanvasY(forkBendRotated.y)}
-                stroke="#22c55e"
-                strokeWidth="2.67"
-              />
-
-              {/* Fork lower legs */}
-              <line
-                x1={toCanvasX(forkBendRotated.x)}
-                y1={toCanvasY(forkBendRotated.y)}
-                x2={toCanvasX(frontAxleRotated.x)}
-                y2={toCanvasY(frontAxleRotated.y)}
-                stroke="#22c55e"
-                strokeWidth="2.67"
-              />
-            </>
-          );
-        })()}
-
-        {/* Swingarm triangle - pivot, eye, axle (orange) */}
         {(() => {
           const frameMountRotated = applyPitchRotation({
             x: bbPos.x + geometry.shockFrameMountX,
@@ -259,14 +167,6 @@ export function BikeVisualization({
 
           return (
             <>
-              {/* Swingarm outline - pivot to eye to axle */}
-              <polyline
-                points={`${toCanvasX(pivotPosRotated.x)},${toCanvasY(pivotPosRotated.y)} ${toCanvasX(shockEyePosRotated.x)},${toCanvasY(shockEyePosRotated.y)} ${toCanvasX(rearAxlePosRotated.x)},${toCanvasY(rearAxlePosRotated.y)} ${toCanvasX(pivotPosRotated.x)},${toCanvasY(pivotPosRotated.y)}`}
-                fill="none"
-                stroke="#f97316"
-                strokeWidth="1.33"
-              />
-
               {/* Shock linkage - frame mount to eye */}
               <line
                 x1={toCanvasX(frameMountRotated.x)}
@@ -304,26 +204,6 @@ export function BikeVisualization({
           );
         })()}
 
-        {/* Front wheel */}
-        <circle
-          cx={toCanvasX(frontAxleRotated.x)}
-          cy={toCanvasY(frontAxleRotated.y)}
-          r={frontWheelRadius * scale}
-          fill="none"
-          stroke="#1f2937"
-          strokeWidth="2"
-        />
-
-        {/* Rear wheel */}
-        <circle
-          cx={toCanvasX(rearAxlePosRotated.x)}
-          cy={toCanvasY(rearAxlePosRotated.y)}
-          r={rearWheelRadius * scale}
-          fill="none"
-          stroke="#1f2937"
-          strokeWidth="2"
-        />
-
         {/* Drivetrain - Chainring, Cog, and Chain */}
         {(() => {
           const chainringPos = {
@@ -351,53 +231,53 @@ export function BikeVisualization({
               cogRotated,
               cogRadius,
             );
-            chainSegments.push(tangents)
+            chainSegments.push(tangents);
           } else {
             if (geometry.idlerType === IdlerType.FrameMounted) {
-            // Idler to cog
-            const idlerPos = {
-              x: bbPos.x + geometry.idlerX,
-              y: bbPos.y + geometry.idlerY,
-            };
-            idlerRotated = applyPitchRotation(idlerPos);
-          } else {
-            // Swingarm-mounted idler: chainring to idler
-            const topOutIdlerX = geometry.idlerX - geometry.bbToPivotX;
-            const topOutIdlerY =
-              geometry.bbHeight +
-              geometry.idlerY -
-              (geometry.bbHeight + geometry.bbToPivotY);
-            const topOutPivot = {
-              x: geometry.bbToPivotX,
-              y: geometry.bbHeight + geometry.bbToPivotY,
-            };
-            const topOutVertDist =
-              geometry.rearWheelDiameter / 2 - topOutPivot.y;
-            const topOutHorizDist = Math.sqrt(
-              geometry.swingarmLength * geometry.swingarmLength -
-                topOutVertDist * topOutVertDist,
-            );
-            const topOutSwingarmAngle = Math.atan2(
-              0 - topOutPivot.y,
-              topOutPivot.x - topOutHorizDist - topOutPivot.x,
-            );
-            const currentSwingarmAngle = Math.atan2(
-              pivotPos.y - state.rearAxlePosition.y,
-              pivotPos.x - state.rearAxlePosition.x,
-            );
-            const rotationAngle = currentSwingarmAngle - topOutSwingarmAngle;
-            const rotatedOffsetX =
-              topOutIdlerX * Math.cos(rotationAngle) -
-              topOutIdlerY * Math.sin(rotationAngle);
-            const rotatedOffsetY =
-              topOutIdlerX * Math.sin(rotationAngle) +
-              topOutIdlerY * Math.cos(rotationAngle);
-            const idlerPos = {
-              x: pivotPos.x + rotatedOffsetX,
-              y: pivotPos.y + rotatedOffsetY,
-            };
-            idlerRotated = applyPitchRotation(idlerPos);
-          }
+              // Idler to cog
+              const idlerPos = {
+                x: bbPos.x + geometry.idlerX,
+                y: bbPos.y + geometry.idlerY,
+              };
+              idlerRotated = applyPitchRotation(idlerPos);
+            } else {
+              // Swingarm-mounted idler: chainring to idler
+              const topOutIdlerX = geometry.idlerX - geometry.bbToPivotX;
+              const topOutIdlerY =
+                geometry.bbHeight +
+                geometry.idlerY -
+                (geometry.bbHeight + geometry.bbToPivotY);
+              const topOutPivot = {
+                x: geometry.bbToPivotX,
+                y: geometry.bbHeight + geometry.bbToPivotY,
+              };
+              const topOutVertDist =
+                geometry.rearWheelDiameter / 2 - topOutPivot.y;
+              const topOutHorizDist = Math.sqrt(
+                geometry.swingarmLength * geometry.swingarmLength -
+                  topOutVertDist * topOutVertDist,
+              );
+              const topOutSwingarmAngle = Math.atan2(
+                0 - topOutPivot.y,
+                topOutPivot.x - topOutHorizDist - topOutPivot.x,
+              );
+              const currentSwingarmAngle = Math.atan2(
+                pivotPos.y - state.rearAxlePosition.y,
+                pivotPos.x - state.rearAxlePosition.x,
+              );
+              const rotationAngle = currentSwingarmAngle - topOutSwingarmAngle;
+              const rotatedOffsetX =
+                topOutIdlerX * Math.cos(rotationAngle) -
+                topOutIdlerY * Math.sin(rotationAngle);
+              const rotatedOffsetY =
+                topOutIdlerX * Math.sin(rotationAngle) +
+                topOutIdlerY * Math.cos(rotationAngle);
+              const idlerPos = {
+                x: pivotPos.x + rotatedOffsetX,
+                y: pivotPos.y + rotatedOffsetY,
+              };
+              idlerRotated = applyPitchRotation(idlerPos);
+            }
 
             const idlerRadius = sprocketRadius(geometry.idlerTeeth);
             idlerRadiusScreen = idlerRadius * scale;
@@ -408,7 +288,7 @@ export function BikeVisualization({
               cogRotated,
               cogRadius,
             );
-            chainSegments.push(cogToIdler)
+            chainSegments.push(cogToIdler);
 
             const chainringToIdler = tangentPoints(
               chainringRotated,
@@ -416,7 +296,7 @@ export function BikeVisualization({
               idlerRotated,
               idlerRadius,
             );
-            chainSegments.push(chainringToIdler)
+            chainSegments.push(chainringToIdler);
           }
 
           return (
@@ -451,17 +331,19 @@ export function BikeVisualization({
                 />
               )}
               {/* Chainline */}
-              {chainSegments.map((segment, index) => <line
-                x1={toCanvasX(segment.start.x)}
-                y1={toCanvasY(segment.start.y)}
-                x2={toCanvasX(segment.end.x)}
-                y2={toCanvasY(segment.end.y)}
-                stroke="#eab308"
-                strokeWidth="2"
-                opacity="0.9"
-                key={index}
-              />)}
-              
+              {chainSegments.map((segment, index) => (
+                <line
+                  x1={toCanvasX(segment.start.x)}
+                  y1={toCanvasY(segment.start.y)}
+                  x2={toCanvasX(segment.end.x)}
+                  y2={toCanvasY(segment.end.y)}
+                  stroke="#eab308"
+                  strokeWidth="2"
+                  opacity="0.9"
+                  key={index}
+                />
+              ))}
+
               {/* Crank arm and pedal */}
               {(() => {
                 const crankLength = 165.0; // 165mm standard crank
@@ -494,7 +376,7 @@ export function BikeVisualization({
                 );
               })()}
             </>
-          )
+          );
         })()}
 
         {/* BB (bottom bracket) */}

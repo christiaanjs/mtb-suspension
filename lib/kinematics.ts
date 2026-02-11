@@ -56,7 +56,8 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
 
     // Calculate front axle position with proportional fork compression
     const htaRad = computedProperties.headTubeAngleRadians(geometry);
-    const effectiveForkLength = geometry.forkLength - firstPassState.proportionalForkStroke;
+    const effectiveForkLength =
+      geometry.forkLength - firstPassState.proportionalForkStroke;
 
     const frontAxlePos: Point2D = {
       x:
@@ -138,8 +139,7 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
 
     // Calculate wheel rate using actual leverage ratio
     state.wheelRate =
-      geometry.shockSpringRate /
-      (state.leverageRatio * state.leverageRatio);
+      geometry.shockSpringRate / (state.leverageRatio * state.leverageRatio);
 
     // Calculate anti-squat and anti-rise from visual geometry
     state.antiSquat = calculateVisualAntiSquat(state, geometry);
@@ -446,3 +446,16 @@ function calculateVisualAntiRise(
   // Anti-rise is opposite to anti-squat
   return 100 - calculateVisualAntiSquat(state, geometry);
 }
+
+export const getApplyPitchRotation =
+  (rearAxle: Point2D, pitchAngleDegrees: number) => (point: Point2D) => {
+    const pitchRad = pitchAngleDegrees * (Math.PI / 180);
+    const dx = point.x - rearAxle.x;
+    const dy = point.y - rearAxle.y;
+    const cosA = Math.cos(-pitchRad);
+    const sinA = Math.sin(-pitchRad);
+    return {
+      x: rearAxle.x + dx * cosA - dy * sinA,
+      y: rearAxle.y + dx * sinA + dy * cosA,
+    };
+  };
