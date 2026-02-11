@@ -1,20 +1,8 @@
 import { getApplyPitchRotation } from "@/lib/kinematics";
-import {
-  BikeGeometry,
-  BoundsConversions,
-  computedProperties,
-  KinematicState,
-} from "@/lib/types";
+import { computedProperties } from "@/lib/types";
+import { DrawComponentProps } from "./types";
 
-export const Wheels = ({
-  state,
-  geometry,
-  conversion,
-}: {
-  state: KinematicState;
-  geometry: BikeGeometry;
-  conversion: BoundsConversions;
-}) => {
+export const Wheels = ({ state, geometry, conversion }: DrawComponentProps) => {
   const { toCanvasX, toCanvasY } = conversion;
   const applyPitchRotation = getApplyPitchRotation(
     state.rearAxlePosition,

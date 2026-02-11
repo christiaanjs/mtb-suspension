@@ -1,21 +1,13 @@
 import { degreesToRadians } from "@/lib/geometry";
 import { getApplyPitchRotation } from "@/lib/kinematics";
-import {
-  BikeGeometry,
-  BoundsConversions,
-  computedProperties,
-  KinematicStateFirstPass,
-} from "@/lib/types";
+import { computedProperties } from "@/lib/types";
+import { DrawComponentProps } from "./types";
 
 export const FrontTriangle = ({
   state,
   geometry,
   conversion,
-}: {
-  state: KinematicStateFirstPass;
-  geometry: BikeGeometry;
-  conversion: BoundsConversions;
-}) => {
+}: DrawComponentProps) => {
   const bbPos = state.bbPosition;
   const { toCanvasX, toCanvasY } = conversion;
   const seatAngleRad = degreesToRadians(geometry.seatAngle);
@@ -92,6 +84,14 @@ export const FrontTriangle = ({
         y2={toCanvasY(seatTopRotated.y)}
         stroke="#2563eb"
         strokeWidth="1.33"
+      />
+
+      {/* Bottom bracket */}
+      <circle
+        cx={toCanvasX(bbPosRotated.x)}
+        cy={toCanvasY(bbPosRotated.y)}
+        r={4}
+        fill="#06b6d4"
       />
     </>
   );

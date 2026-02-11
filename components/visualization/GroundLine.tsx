@@ -1,17 +1,12 @@
-import { BikeGeometry, BoundsConversions } from "@/lib/types";
+import { DrawComponentProps } from "./types";
 
-export const GroundLine = ({
-  conversions,
-}: {
-  conversions: BoundsConversions;
-  geometry: BikeGeometry;
-}) => {
-  const y = conversions.toCanvasY(0);
+export const GroundLine = ({ conversion }: DrawComponentProps) => {
+  const y = conversion.toCanvasY(0);
   return (
     <line
       x1={0}
       y1={y}
-      x2={conversions.width}
+      x2={conversion.width}
       y2={y}
       stroke="#999"
       strokeWidth="1"

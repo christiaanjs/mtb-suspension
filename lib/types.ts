@@ -232,6 +232,7 @@ export interface VisualizationBounds {
 
 export interface BoundsConversions {
   scale: number;
+  padding: number;
   width: number;
   height: number;
   toCanvas: (point: Point2D) => Point2D;
@@ -256,6 +257,7 @@ export const getScreenConversions = (
   };
 
   return {
+    padding,
     scale,
     width,
     height,
