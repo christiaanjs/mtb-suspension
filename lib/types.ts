@@ -8,6 +8,11 @@ export interface Point2D {
   y: number;
 }
 
+export interface Circle {
+  center: Point2D;
+  radius: number;
+}
+
 export const Point2D = {
   zero: { x: 0, y: 0 } as Point2D,
   create: (x: number, y: number): Point2D => ({ x, y }),
@@ -91,7 +96,9 @@ export interface BikeGeometry {
   seatTubeLength: number; // mm (vertical height)
 }
 
-export function createDefaultGeometry(): BikeGeometry {
+export function createDefaultGeometry({
+  overrides,
+}: { overrides?: Partial<BikeGeometry> } = {}): BikeGeometry {
   return {
     bbHeight: 330.0,
     stack: 625.0,
@@ -126,6 +133,7 @@ export function createDefaultGeometry(): BikeGeometry {
     forkTravel: 170.0,
     forkCompressionPercent: 0.0,
     seatTubeLength: 320.0,
+    ...overrides,
   };
 }
 

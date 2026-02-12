@@ -5,17 +5,54 @@ export function degreesToRadians(degrees: number): number {
   return (degrees * Math.PI) / 180;
 }
 
-export function distance(p1: Point2D, p2: Point2D): number {
-  const dx = p2.x - p1.x;
-  const dy = p2.y - p1.y;
-  return Math.sqrt(dx * dx + dy * dy);
+export function radiansToDegrees(radians: number): number {
+  return (radians * 180) / Math.PI;
 }
 
+export function dot(p: Point2D, q: Point2D): number {
+  return p.x * q.x + p.y * q.y;
+}
+
+export function cross(p: Point2D, q: Point2D): number {
+  return p.x * q.y - p.y * q.x;
+}
+
+export function magnitude(p: Point2D): number {
+  return Math.sqrt(dot(p, p));
+}
+
+export function distance(p1: Point2D, p2: Point2D): number {
+  return magnitude(Point2D.subtract(p2, p1));
+}
+
+export function normalise(p: Point2D): Point2D {
+  const mag = magnitude(p);
+  return Point2D.multiply(p, 1 / mag);
+}
+
+// Angle between x-axis andf a vector from 'from' to 'to' in radians
 export function angle(from: Point2D, to: Point2D): number {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   return Math.atan2(dy, dx);
 }
+
+export function angleBetween(a: Point2D, b: Point2D): number {
+  const magA = magnitude(a);
+  const magB = magnitude(b);
+
+  if (magA === 0 || magB === 0) {
+    throw new Error("Cannot compute angle with zero-length vector");
+  }
+
+  const cosine = dot(a, b) / (magA * magB);
+
+  // Clamp to avoid floating point precision issues
+  // const clamped = Math.min(1, Math.max(-1, cosine));
+
+  return Math.acos(cosine);
+}
+
 
 export function lineIntersection(
   line1Point1: Point2D,
@@ -61,6 +98,37 @@ export function rotate(
     x: pivot.x + rotatedX,
     y: pivot.y + rotatedY,
   };
+}
+
+/**
+ * @param P0 original reference line start  
+ * @param A0 original reference line end
+ * @param I0 point to be transformed
+ * @param P1 transformed reference line start
+ * @param A1 transformed reference line end
+ * @returns transformed point
+ */
+export function transformPointByReferenceLine(
+  P0: Point2D,
+  A0: Point2D,
+  I0: Point2D,
+  P1: Point2D,
+  A1: Point2D,
+): Point2D {
+  const d0 = normalise(Point2D.subtract(A0, P0));
+  const d1 = normalise(Point2D.subtract(A1, P1));
+
+  const c = dot(d0, d1);
+  const s = cross(d0, d1);
+
+  const local = Point2D.subtract(I0, P0);
+
+  const rotated = {
+    x: c * local.x - s * local.y,
+    y: s * local.x + c * local.y,
+  };
+
+  return Point2D.add(P1, rotated);
 }
 
 export function calculateChainLength(

@@ -6,8 +6,16 @@ import {
   AnalysisResults,
   Point2D,
   computedProperties,
+  Circle,
+  IdlerType,
 } from "./types";
-import { distance, angle, circleCircleIntersection } from "./geometry";
+import {
+  distance,
+  angle,
+  circleCircleIntersection,
+  sprocketRadius,
+  transformPointByReferenceLine,
+} from "./geometry";
 
 interface RigidTriangle {
   pivotToEye: number;
@@ -406,47 +414,83 @@ function calculateStateAtShockStroke(
   return state;
 }
 
+export const getIdlerPosition = (
+  state: KinematicState,
+  geometry: BikeGeometry,
+): Point2D | null => {
+  if (geometry.idlerType === IdlerType.None) {
+    return null;
+  } else if (geometry.idlerType === IdlerType.FrameMounted) {
+    return Point2D.add(state.bbPosition, {
+      x: geometry.idlerX,
+      y: geometry.idlerY,
+    });
+  } else {
+    // Swingarm-mounted idler
+    const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
+    const topOutIdler = {
+      x: geometry.idlerX,
+      y: geometry.bbHeight + geometry.idlerY,
+    };
+    const topOutPivot = {
+      x: geometry.bbToPivotX,
+      y: geometry.bbHeight + geometry.bbToPivotY,
+    };
+
+    const topOutPivotToAxleVertDist = rearWheelRadius - topOutPivot.y;
+    const topOutPivotToAxleHorizDist = Math.sqrt(
+      geometry.swingarmLength * geometry.swingarmLength -
+        topOutPivotToAxleVertDist * topOutPivotToAxleVertDist,
+    );
+    const topOutAxle = {
+      x: topOutPivot.x - topOutPivotToAxleHorizDist,
+      y: rearWheelRadius,
+    };
+    return transformPointByReferenceLine(
+      topOutPivot,
+      topOutAxle,
+      topOutIdler,
+      state.pivotPosition,
+      state.rearAxlePosition,
+    );
+  }
+};
+
+const getFrontSprocketCircle = (
+  state: KinematicState,
+  geometry: BikeGeometry,
+): Circle => {
+  if (geometry.idlerType === IdlerType.None) {
+    const center = Point2D.add(state.bbPosition, {
+      x: geometry.chainringOffsetX,
+      y: geometry.chainringOffsetY,
+    });
+    const radius = sprocketRadius(geometry.chainringTeeth);
+    return { center, radius };
+  } else {
+    const radius = sprocketRadius(geometry.idlerTeeth);
+    const center = getIdlerPosition(state, geometry)!;
+    return { center, radius };
+  }
+};
+
+
 function calculateVisualAntiSquat(
   state: KinematicState,
   geometry: BikeGeometry,
+  options?: { sprocketTangent?: boolean },
 ): number {
-  // Calculate from visual geometry - the angle between suspension line of action
-  // and the chain line
-  const pivotToAxle = state.rearAxlePosition;
-  const pivotToEye = state.swingarmEyePosition;
-  const frameMount: Point2D = {
-    x: geometry.shockFrameMountX,
-    y: geometry.bbHeight + geometry.shockFrameMountY,
-  };
-
-  // Swingarm angle
-  const swingarmAngle = angle(state.pivotPosition, pivotToAxle);
-
-  // Shock/spring line angle (from eye to frame mount)
-  const shockAngle = angle(pivotToEye, frameMount);
-
-  // Angle between shock and swingarm
-  let angleDiff = shockAngle - swingarmAngle;
-
-  // Normalize to -π to π
-  while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-  while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-
-  // Chain line angle (simplified - assume roughly horizontal)
-  const driveAngle = 0; // approximately horizontal for this app
-
-  // Anti-squat is the sine of the angle between chain line and shock
-  const antiSquat = Math.sin(angleDiff - driveAngle) * 100;
-
-  return Math.max(0, Math.min(100, antiSquat));
+  // TODO
+  const sprocket = getFrontSprocketCircle(state, geometry);
+  return NaN;
 }
 
 function calculateVisualAntiRise(
   state: KinematicState,
   geometry: BikeGeometry,
 ): number {
-  // Anti-rise is opposite to anti-squat
-  return 100 - calculateVisualAntiSquat(state, geometry);
+  // TODO
+  return NaN;
 }
 
 function computeTrail(state: KinematicState, geometry: BikeGeometry): number {

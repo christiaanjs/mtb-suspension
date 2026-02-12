@@ -5,12 +5,38 @@ import {
   BikeGeometry,
   AnalysisResults,
   createDefaultGeometry,
+  IdlerType,
 } from "@/lib/types";
 import { runKinematicAnalysis } from "@/lib/kinematics";
+import { useSearchParams } from "next/navigation";
+
+const getOverridesFromQuery = (idlerQuery: string | null) => {
+  if (typeof idlerQuery === "string") {
+    switch (idlerQuery.toLowerCase()) {
+      case "frame":
+        return { idlerType: IdlerType.FrameMounted, idlerX: -60, idlerY: 160 };
+      case "swingarm":
+        return {
+          idlerType: IdlerType.SwingarmMounted,
+          idlerX: -60,
+          idlerY: 160,
+        };
+      default:
+        return {};
+    }
+  } else {
+    return {};
+  }
+};
 
 export function useBikeViewModel() {
+
+  const searchParams = useSearchParams();
+
+  const idler = searchParams.get("idler");
+
   const [geometry, setGeometry] = useState<BikeGeometry>(
-    createDefaultGeometry(),
+    createDefaultGeometry({ overrides: getOverridesFromQuery(idler) }),
   );
   const [bikeName, setBikeName] = useState("Custom Build");
   const [analysisResults, setAnalysisResults] = useState<AnalysisResults>({
