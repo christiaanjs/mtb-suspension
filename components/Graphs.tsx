@@ -295,7 +295,7 @@ export function GraphPanel({
     // { value: GraphType.AntiRise, label: "Anti-Rise" },
     // { value: GraphType.PedalKickback, label: "Pedal Kickback" },
     // { value: GraphType.ChainGrowth, label: "Chain Growth" },
-    // { value: GraphType.WheelRate, label: "Wheel Rate" },
+    { value: GraphType.WheelRate, label: "Wheel Rate" },
     { value: GraphType.Trail, label: "Trail" },
     { value: GraphType.PitchAngle, label: "Pitch Angle" },
   ];
