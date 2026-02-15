@@ -7,6 +7,7 @@ import { AnimationView } from "@/components/Visualization";
 import { GraphPanel } from "@/components/Graphs";
 import { Attribution } from "@/components/Attribution";
 
+
 export default function Home() {
   const viewModel = useBikeViewModel();
   const [isAnimating, setIsAnimating] = useState(false);

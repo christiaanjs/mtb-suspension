@@ -8,7 +8,6 @@ import {
   IdlerType,
 } from "@/lib/types";
 import { runKinematicAnalysis } from "@/lib/kinematics";
-import { useSearchParams } from "next/navigation";
 
 const getOverridesFromQuery = (idlerQuery: string | null) => {
   if (typeof idlerQuery === "string") {
@@ -29,15 +28,16 @@ const getOverridesFromQuery = (idlerQuery: string | null) => {
   }
 };
 
-export function useBikeViewModel() {
+type Options = {
+  idlerQuery?: string | null;
+};
 
-  const searchParams = useSearchParams();
-
-  const idler = searchParams.get("idler");
-
+export function useBikeViewModel({ idlerQuery = null }: Options = {}) {
+  const overrides = getOverridesFromQuery(idlerQuery);
   const [geometry, setGeometry] = useState<BikeGeometry>(
-    createDefaultGeometry({ overrides: getOverridesFromQuery(idler) }),
+    createDefaultGeometry({ overrides }),
   );
+
   const [bikeName, setBikeName] = useState("Custom Build");
   const [analysisResults, setAnalysisResults] = useState<AnalysisResults>({
     states: [],
@@ -101,9 +101,9 @@ export function useBikeViewModel() {
   }, []);
 
   const resetToDefaults = useCallback(() => {
-    setGeometry(createDefaultGeometry());
+    setGeometry(createDefaultGeometry({ overrides }));
     setBikeName("Custom Build");
-  }, []);
+  }, [overrides]);
 
   return {
     geometry,

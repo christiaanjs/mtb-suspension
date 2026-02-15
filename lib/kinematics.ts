@@ -15,6 +15,9 @@ import {
   circleCircleIntersection,
   sprocketRadius,
   transformPointByReferenceLine,
+  tangentPoints,
+  lineIntersection,
+  lineIntersectionWithVertical,
 } from "./geometry";
 
 interface RigidTriangle {
@@ -474,15 +477,88 @@ const getFrontSprocketCircle = (
   }
 };
 
+export const getApplyPitchRotation =
+  (rearAxle: Point2D, pitchAngleDegrees: number) => (point: Point2D) => {
+    const pitchRad = pitchAngleDegrees * (Math.PI / 180);
+    const dx = point.x - rearAxle.x;
+    const dy = point.y - rearAxle.y;
+    const cosA = Math.cos(-pitchRad);
+    const sinA = Math.sin(-pitchRad);
+    return {
+      x: rearAxle.x + dx * cosA - dy * sinA,
+      y: rearAxle.y + dx * sinA + dy * cosA,
+    };
+  };
 
 function calculateVisualAntiSquat(
   state: KinematicState,
   geometry: BikeGeometry,
-  options?: { sprocketTangent?: boolean },
+  { sprocketTangent = true }: { sprocketTangent?: boolean } = {},
 ): number {
   // TODO
-  const sprocket = getFrontSprocketCircle(state, geometry);
-  return NaN;
+  const applyPitchRotation = getApplyPitchRotation(
+    state.rearAxlePosition,
+    state.pitchAngleDegrees,
+  );
+  const frontSprocket = getFrontSprocketCircle(state, geometry);
+  const frontSprocketRotated = {
+    center: applyPitchRotation(frontSprocket.center),
+    radius: frontSprocket.radius,
+  };
+  const rearSprocketRotated = {
+    center: applyPitchRotation(state.rearAxlePosition),
+    radius: computedProperties.rearWheelRadius(geometry),
+  };
+  const { start: chainlineStart, end: chainlineEnd } = sprocketTangent
+    ? tangentPoints(
+        frontSprocketRotated.center,
+        frontSprocketRotated.radius,
+        rearSprocketRotated.center,
+        rearSprocketRotated.radius,
+      )
+    : { start: frontSprocketRotated.center, end: rearSprocketRotated.center };
+
+  const instantCenter = applyPitchRotation(state.pivotPosition);
+  const rearAxleRotated = applyPitchRotation(state.rearAxlePosition);
+  const frontAxleRotated = applyPitchRotation(state.frontAxlePosition);
+  const instantForceCenter = lineIntersection(
+    chainlineStart,
+    chainlineEnd,
+    instantCenter,
+    rearAxleRotated,
+  );
+  if (!instantForceCenter) {
+    console.warn(
+      "No instant force center intersection found for anti-squat calculation",
+    );
+    return 0;
+  }
+
+  const rearContactPatch = { x: rearAxleRotated.x, y: 0 };
+  const antiSquatIntersection = lineIntersectionWithVertical(
+    rearContactPatch,
+    instantForceCenter,
+    frontAxleRotated.x,
+  );
+  if (!antiSquatIntersection) {
+    console.warn(
+      "No anti-squat intersection found for anti-squat calculation",
+      {
+        rearContactPatch,
+        instantForceCenter,
+        frontAxleRotated,
+        rearAxleRotated,
+        instantCenter,
+        chainlineStart,
+        chainlineEnd,
+      },
+    );
+    return 0;
+  }
+
+  const bbPositionRotated = applyPitchRotation(state.bbPosition);
+  const centreOfMassHeight = bbPositionRotated.y + geometry.comY;
+  return (antiSquatIntersection.y / centreOfMassHeight) * 100;
 }
 
 function calculateVisualAntiRise(
@@ -523,15 +599,3 @@ function computeTrail(state: KinematicState, geometry: BikeGeometry): number {
   return numerator / denominator;
 }
 
-export const getApplyPitchRotation =
-  (rearAxle: Point2D, pitchAngleDegrees: number) => (point: Point2D) => {
-    const pitchRad = pitchAngleDegrees * (Math.PI / 180);
-    const dx = point.x - rearAxle.x;
-    const dy = point.y - rearAxle.y;
-    const cosA = Math.cos(-pitchRad);
-    const sinA = Math.sin(-pitchRad);
-    return {
-      x: rearAxle.x + dx * cosA - dy * sinA,
-      y: rearAxle.y + dx * sinA + dy * cosA,
-    };
-  };

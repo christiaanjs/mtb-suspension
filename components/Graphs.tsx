@@ -291,7 +291,7 @@ export function GraphPanel({
 }: GraphPanelProps) {
   const graphs = [
     { value: GraphType.LeverageRatio, label: "Leverage Ratio" },
-    // { value: GraphType.AntiSquat, label: "Anti-Squat" },
+    { value: GraphType.AntiSquat, label: "Anti-Squat" },
     // { value: GraphType.AntiRise, label: "Anti-Rise" },
     // { value: GraphType.PedalKickback, label: "Pedal Kickback" },
     // { value: GraphType.ChainGrowth, label: "Chain Growth" },

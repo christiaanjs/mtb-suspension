@@ -83,6 +83,28 @@ export function lineIntersection(
   };
 }
 
+export function lineIntersectionWithVertical(
+  linePoint1: Point2D,
+  linePoint2: Point2D,
+  x: number,
+): Point2D | null {
+  const x1 = linePoint1.x,
+    y1 = linePoint1.y;
+  const x2 = linePoint2.x,
+    y2 = linePoint2.y;
+
+  if (Math.abs(x2 - x1) < 1e-9) {
+    return null; // Line is vertical, no unique intersection
+  }
+
+  const t = (x - x1) / (x2 - x1);
+
+  return {
+    x,
+    y: y1 + t * (y2 - y1),
+  };
+}
+
 export function rotate(
   point: Point2D,
   pivot: Point2D,
