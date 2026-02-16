@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { AnalysisResults, GraphType } from "@/lib/types";
 
 interface GraphProps {
@@ -292,7 +291,7 @@ export function GraphPanel({
   const graphs = [
     { value: GraphType.LeverageRatio, label: "Leverage Ratio" },
     { value: GraphType.AntiSquat, label: "Anti-Squat" },
-    // { value: GraphType.AntiRise, label: "Anti-Rise" },
+    { value: GraphType.AntiRise, label: "Anti-Rise" },
     // { value: GraphType.PedalKickback, label: "Pedal Kickback" },
     // { value: GraphType.ChainGrowth, label: "Chain Growth" },
     { value: GraphType.WheelRate, label: "Wheel Rate" },

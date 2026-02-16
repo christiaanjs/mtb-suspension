@@ -490,12 +490,24 @@ export const getApplyPitchRotation =
     };
   };
 
+export function getRotatedCentreOfMass(
+  state: KinematicState,
+  geometry: BikeGeometry,
+  applyPitchRotation: (p: Point2D) => Point2D,
+): Point2D {
+  return applyPitchRotation(
+    Point2D.add(state.bbPosition, {
+      x: geometry.comX,
+      y: geometry.comY,
+    }),
+  );
+}
+
 function calculateVisualAntiSquat(
   state: KinematicState,
   geometry: BikeGeometry,
   { sprocketTangent = true }: { sprocketTangent?: boolean } = {},
 ): number {
-  // TODO
   const applyPitchRotation = getApplyPitchRotation(
     state.rearAxlePosition,
     state.pitchAngleDegrees,
@@ -556,8 +568,11 @@ function calculateVisualAntiSquat(
     return 0;
   }
 
-  const bbPositionRotated = applyPitchRotation(state.bbPosition);
-  const centreOfMassHeight = bbPositionRotated.y + geometry.comY;
+  const centreOfMassHeight = getRotatedCentreOfMass(
+    state,
+    geometry,
+    applyPitchRotation,
+  ).y;
   return (antiSquatIntersection.y / centreOfMassHeight) * 100;
 }
 
@@ -565,8 +580,36 @@ function calculateVisualAntiRise(
   state: KinematicState,
   geometry: BikeGeometry,
 ): number {
-  // TODO
-  return NaN;
+  
+  const applyPitchRotation = getApplyPitchRotation(
+    state.rearAxlePosition,
+    state.pitchAngleDegrees,
+  );
+
+  const instantCenter = applyPitchRotation(state.pivotPosition);
+  const rearAxleRotated = applyPitchRotation(state.rearAxlePosition);
+  const frontAxleRotated = applyPitchRotation(state.frontAxlePosition);
+
+  const antiriseIntersection = lineIntersectionWithVertical(
+    rearAxleRotated,
+    instantCenter,
+    frontAxleRotated.x,
+  );
+  if (!antiriseIntersection) {
+    console.warn("No anti-rise intersection found for anti-rise calculation", {
+      instantCenter,
+      rearAxleRotated,
+      frontAxleRotated,
+    });
+    return 0;
+  }
+  const centreOfMassHeight = getRotatedCentreOfMass(
+    state,
+    geometry,
+    applyPitchRotation,
+  ).y;
+
+  return (antiriseIntersection.y / centreOfMassHeight) * 100;
 }
 
 function computeTrail(state: KinematicState, geometry: BikeGeometry): number {

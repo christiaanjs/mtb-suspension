@@ -12,6 +12,7 @@ export const CentreOfMass = ({
     state.rearAxlePosition,
     state.pitchAngleDegrees,
   );
+  // TODO: Do we need to add CoM before or after pitch rotation>
   const comRotated = applyPitchRotation(
     Point2D.add(state.bbPosition, {
       x: geometry.comX,
