@@ -664,7 +664,8 @@ function computeTrail(
   geometry: BikeGeometry,
   applyPitchRotation: (p: Point2D) => Point2D,
 ): number {
-  const contactPatch = { x: frontAxlePos.x, y: 0 };
+  const frontAxleRotated = applyPitchRotation(frontAxlePos);
+  const contactPatch = { x: frontAxleRotated.x, y: 0 };
   const headtubeTop = computedProperties.headTubeTop(geometry, fp.bbPosition);
   const headtubeBottom = computedProperties.headTubeBottom(geometry, fp.bbPosition);
   const htTopRotated = applyPitchRotation(headtubeTop);

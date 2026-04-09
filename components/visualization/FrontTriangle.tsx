@@ -15,9 +15,19 @@ export const FrontTriangle = ({
   const seatTopCanvasX = toCanvasX(state.seatTop.wheelsOnGround.x);
   const seatTopCanvasY = toCanvasY(state.seatTop.wheelsOnGround.y);
 
-  // Downtube junction: ~20mm above head tube bottom in screen space (small-angle approx)
-  const downtubeJunctionX = htBottomCanvasX;
-  const downtubeJunctionY = htBottomCanvasY - 20 * conversion.scale;
+  // Downtube junction: 20mm above head tube bottom along head tube direction in wheelsOnGround space
+  const headTubeDeltaX =
+    state.headTubeTop.wheelsOnGround.x - state.headTubeBottom.wheelsOnGround.x;
+  const headTubeDeltaY =
+    state.headTubeTop.wheelsOnGround.y - state.headTubeBottom.wheelsOnGround.y;
+  const headTubeLength = Math.hypot(headTubeDeltaX, headTubeDeltaY);
+  const downtubeOffset = headTubeLength === 0 ? 0 : 20 / headTubeLength;
+  const downtubeJunctionX = toCanvasX(
+    state.headTubeBottom.wheelsOnGround.x + headTubeDeltaX * downtubeOffset,
+  );
+  const downtubeJunctionY = toCanvasY(
+    state.headTubeBottom.wheelsOnGround.y + headTubeDeltaY * downtubeOffset,
+  );
 
   return (
     <>
