@@ -94,6 +94,8 @@ export default function Home() {
               initialTravelPercentage={viewModel.currentTravelMM}
               isAnimating={isAnimating}
               animationSpeed={viewModel.animationSpeed}
+              selectedGraph={viewModel.selectedGraph}
+              showCalculations={true}
             />
           </div>
 

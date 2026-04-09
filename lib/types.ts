@@ -13,6 +13,11 @@ export interface Circle {
   radius: number;
 }
 
+export interface LineSegment {
+  start: Point2D;
+  end: Point2D;
+}
+
 export const Point2D = {
   zero: { x: 0, y: 0 } as Point2D,
   create: (x: number, y: number): Point2D => ({ x, y }),

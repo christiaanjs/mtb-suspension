@@ -13,7 +13,7 @@ const metricLabelDpUnit: [
 ][] = [
   ["travelMM", "Travel", 1, " mm"],
   ["leverageRatio", "LR", 2, ""],
-  //   ["antiSquat", "AS", 0, "%"],
+  ["antiSquat", "AS", 0, "%"],
   //   ["antiRise", "AR", 0, "%"],
 ];
 

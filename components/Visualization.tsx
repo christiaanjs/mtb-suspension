@@ -6,6 +6,7 @@ import {
   AnalysisResults,
   VisualizationBounds,
   getScreenConversions,
+  Point2D,
 } from "@/lib/types";
 import { GroundLine } from "./visualization/GroundLine";
 import { FrontTriangle } from "./visualization/FrontTriangle";
@@ -17,17 +18,25 @@ import { Shock } from "./visualization/Shock";
 import { Measurements } from "./visualization/Measurements";
 import { Header } from "./visualization/Header";
 import { CentreOfMass } from "./visualization/CentreOfMass";
+import Calculations from "./visualization/Calculations";
+import { AxlePath } from "./visualization/AxlePath";
 
-interface VisualizationProps {
+type VisualizationProps = {
   geometry: BikeGeometry;
   analysisResults: AnalysisResults;
+  axlePath?: Point2D[];
   travelPercentage: number; // 0-100
-}
+  selectedGraph?: string;
+  showCalculations?: boolean;
+};
 
 export function BikeVisualization({
   geometry,
   analysisResults,
   travelPercentage,
+  selectedGraph,
+  axlePath,
+  showCalculations = false,
 }: VisualizationProps) {
   if (analysisResults.states.length === 0) {
     return (
@@ -111,28 +120,31 @@ export function BikeVisualization({
         <Wheels {...drawProps} />
         <Drivetrain {...drawProps} />
         <Shock {...drawProps} />
+        {axlePath && <AxlePath axlePath={axlePath} {...drawProps} />}
         <Measurements {...drawProps} />
         <CentreOfMass {...drawProps} />
+        {showCalculations && selectedGraph && (
+          <Calculations {...drawProps} selectedGraph={selectedGraph} />
+        )}
       </svg>
     </div>
   );
 }
 
-interface AnimationViewProps {
-  geometry: BikeGeometry;
-  analysisResults: AnalysisResults;
+type AnimationViewProps = Omit<VisualizationProps, "travelPercentage"> & {
   initialTravelPercentage: number;
   isAnimating: boolean;
   animationSpeed: number;
-}
+};
 
 export function AnimationView({
-  geometry,
-  analysisResults,
   initialTravelPercentage,
   isAnimating,
   animationSpeed,
+  ...props
 }: AnimationViewProps) {
+  const axlePath = props.analysisResults.states.map((s) => s.rearAxlePosition);
+  console.log("Axle path:", axlePath);
   const [animProgress, setAnimProgress] = React.useState(
     initialTravelPercentage,
   );
@@ -153,9 +165,9 @@ export function AnimationView({
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-black">
       <BikeVisualization
-        geometry={geometry}
-        analysisResults={analysisResults}
         travelPercentage={animProgress}
+        {...props}
+        axlePath={axlePath}
       />
       <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
         <div className="flex items-center gap-4">

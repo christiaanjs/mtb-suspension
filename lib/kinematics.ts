@@ -8,6 +8,7 @@ import {
   computedProperties,
   Circle,
   IdlerType,
+  LineSegment,
 } from "./types";
 import {
   distance,
@@ -463,7 +464,10 @@ const getFrontSprocketCircle = (
   state: KinematicState,
   geometry: BikeGeometry,
 ): Circle => {
-  if (geometry.idlerType === IdlerType.None) {
+  if (
+    geometry.idlerType === IdlerType.None ||
+    geometry.idlerType === IdlerType.SwingarmMounted
+  ) {
     const center = Point2D.add(state.bbPosition, {
       x: geometry.chainringOffsetX,
       y: geometry.chainringOffsetY,
@@ -473,6 +477,24 @@ const getFrontSprocketCircle = (
   } else {
     const radius = sprocketRadius(geometry.idlerTeeth);
     const center = getIdlerPosition(state, geometry)!;
+    return { center, radius };
+  }
+};
+
+const getRearSprocketCircle = (
+  state: KinematicState,
+  geometry: BikeGeometry,
+): Circle => {
+  if (
+    geometry.idlerType === IdlerType.None ||
+    geometry.idlerType === IdlerType.FrameMounted
+  ) {
+    const center = state.rearAxlePosition;
+    const radius = sprocketRadius(geometry.cogTeeth);
+    return { center, radius };
+  } else {
+    const center = getIdlerPosition(state, geometry)!;
+    const radius = sprocketRadius(geometry.idlerTeeth);
     return { center, radius };
   }
 };
@@ -503,11 +525,29 @@ export function getRotatedCentreOfMass(
   );
 }
 
-function calculateVisualAntiSquat(
+type AntiSquatStep1 = {
+  chainForce: LineSegment;
+  suspensionForce: LineSegment;
+};
+type AntiSquatStep2 = AntiSquatStep1 & {
+  instantForceLine: LineSegment;
+  frontContactPatch: Point2D;
+};
+type AntiSquatFinal = AntiSquatStep2 & {
+  antiSquatIntersection: Point2D;
+  centreOfMassHeight: number;
+};
+
+type AntiSquatCalculations = AntiSquatStep1 | AntiSquatStep2 | AntiSquatFinal;
+
+export const doAntiSquatCalculations = (
   state: KinematicState,
   geometry: BikeGeometry,
-  { sprocketTangent = true }: { sprocketTangent?: boolean } = {},
-): number {
+  {
+    sprocketTangent = true,
+    warn = false,
+  }: { sprocketTangent?: boolean; warn?: boolean } = {},
+): AntiSquatCalculations => {
   const applyPitchRotation = getApplyPitchRotation(
     state.rearAxlePosition,
     state.pitchAngleDegrees,
@@ -517,9 +557,10 @@ function calculateVisualAntiSquat(
     center: applyPitchRotation(frontSprocket.center),
     radius: frontSprocket.radius,
   };
+  const rearSprocket = getRearSprocketCircle(state, geometry);
   const rearSprocketRotated = {
-    center: applyPitchRotation(state.rearAxlePosition),
-    radius: computedProperties.rearWheelRadius(geometry),
+    center: applyPitchRotation(rearSprocket.center),
+    radius: rearSprocket.radius,
   };
   const { start: chainlineStart, end: chainlineEnd } = sprocketTangent
     ? tangentPoints(
@@ -539,33 +580,33 @@ function calculateVisualAntiSquat(
     instantCenter,
     rearAxleRotated,
   );
+  const calculations: AntiSquatStep1 = {
+    chainForce: { start: chainlineStart, end: chainlineEnd },
+    suspensionForce: { start: instantCenter, end: rearAxleRotated },
+  };
   if (!instantForceCenter) {
-    console.warn(
-      "No instant force center intersection found for anti-squat calculation",
-    );
-    return 0;
+    if (warn)
+      console.warn(
+        "No instant force center intersection found for anti-squat calculation",
+        calculations,
+      );
+    return calculations;
   }
 
   const rearContactPatch = { x: rearAxleRotated.x, y: 0 };
+  const calculations2: AntiSquatStep2 = {
+    ...calculations,
+    instantForceLine: { start: instantForceCenter, end: rearContactPatch },
+    frontContactPatch: { x: frontAxleRotated.x, y: 0 },
+  };
   const antiSquatIntersection = lineIntersectionWithVertical(
     rearContactPatch,
     instantForceCenter,
     frontAxleRotated.x,
   );
   if (!antiSquatIntersection) {
-    console.warn(
-      "No anti-squat intersection found for anti-squat calculation",
-      {
-        rearContactPatch,
-        instantForceCenter,
-        frontAxleRotated,
-        rearAxleRotated,
-        instantCenter,
-        chainlineStart,
-        chainlineEnd,
-      },
-    );
-    return 0;
+    if (warn) console.warn("No anti-squat intersection found", calculations2);
+    return calculations2;
   }
 
   const centreOfMassHeight = getRotatedCentreOfMass(
@@ -573,6 +614,27 @@ function calculateVisualAntiSquat(
     geometry,
     applyPitchRotation,
   ).y;
+
+  return {
+    ...calculations2,
+    centreOfMassHeight,
+    antiSquatIntersection,
+  } satisfies AntiSquatFinal;
+};
+
+function calculateVisualAntiSquat(
+  state: KinematicState,
+  geometry: BikeGeometry,
+  { sprocketTangent = true }: { sprocketTangent?: boolean } = {},
+): number {
+  const calculations = doAntiSquatCalculations(state, geometry, {
+    sprocketTangent,
+    warn: false,
+  });
+  if (!("antiSquatIntersection" in calculations)) {
+    return 0;
+  }
+  const { antiSquatIntersection, centreOfMassHeight } = calculations;
   return (antiSquatIntersection.y / centreOfMassHeight) * 100;
 }
 

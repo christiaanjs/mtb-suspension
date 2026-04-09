@@ -15,10 +15,12 @@ export const AxlePath = ({
     state.rearAxlePosition,
     state.pitchAngleDegrees,
   );
-  const points = axlePath
+  console.log("Axle path input:", axlePath);
+  const axlePathWorld = axlePath
     .map((p) => Point2D.add(state.bbPosition, p))
-    .map(applyPitchRotation)
-    .map(toCanvas);
+    .map(applyPitchRotation);
+  console.log("Axle path world:", axlePathWorld);
+  const points = axlePathWorld.map(toCanvas);
   return (
     <polyline
       points={pointsToPolylineString(points)}
