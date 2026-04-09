@@ -224,9 +224,7 @@ function establishRigidTriangle(geometry: BikeGeometry): RigidTriangle {
     };
   }
 
-  const correctEyeIndex = eyeCandidates[0].x > eyeCandidates[1].x ? 0 : 1;
-  const chosenEye = eyeCandidates[correctEyeIndex];
-
+  // Compute axle position first — needed for both eye selection and rigid triangle.
   const verticalDist = rearWheelRadius - pivot.y;
   const horizontalDistSquared =
     geometry.swingarmLength * geometry.swingarmLength - verticalDist * verticalDist;
@@ -245,6 +243,73 @@ function establishRigidTriangle(geometry: BikeGeometry): RigidTriangle {
   const axle1: Point2D = { x: pivot.x + horizontalDist, y: rearWheelRadius };
   const axle2: Point2D = { x: pivot.x - horizontalDist, y: rearWheelRadius };
   const axle = axle1.x < axle2.x ? axle1 : axle2;
+
+  // Physics-based eye selection: the correct candidate is the one where
+  // compressing the shock moves the axle upward (positive wheel travel).
+  // Simulate 0.1 mm of compression and check which candidate produces
+  // a nominal axle Y above ground level.
+  const TEST_COMPRESSION = 0.1;
+  const testEyeCandidates = circleCircleIntersection(
+    pivot,
+    geometry.shockSwingarmMountDistance,
+    frameMount,
+    geometry.shockETE - TEST_COMPRESSION,
+  );
+
+  let correctEyeIndex: number;
+  if (testEyeCandidates.length === 2) {
+    const pivotToAxleDist = distance(pivot, axle);
+    const physicsIndex = eyeCandidates.findIndex((eye, i) => {
+      const pivotToEyeDist = distance(pivot, eye);
+      const eyeToAxleDist = distance(eye, axle);
+      const cosA =
+        (pivotToEyeDist * pivotToEyeDist +
+          pivotToAxleDist * pivotToAxleDist -
+          eyeToAxleDist * eyeToAxleDist) /
+        (2 * pivotToEyeDist * pivotToAxleDist);
+      if (cosA < -1 || cosA > 1) return false;
+      const angleAtPivot = Math.acos(cosA);
+      const pivotToEyeAngle = angle(pivot, eye);
+      const testAxlePlus: Point2D = {
+        x: pivot.x + pivotToAxleDist * Math.cos(pivotToEyeAngle + angleAtPivot),
+        y: pivot.y + pivotToAxleDist * Math.sin(pivotToEyeAngle + angleAtPivot),
+      };
+      const testAxleMinus: Point2D = {
+        x: pivot.x + pivotToAxleDist * Math.cos(pivotToEyeAngle - angleAtPivot),
+        y: pivot.y + pivotToAxleDist * Math.sin(pivotToEyeAngle - angleAtPivot),
+      };
+      const axleAngleIsPositive = distance(testAxlePlus, axle) < distance(testAxleMinus, axle);
+      // Compute where the axle ends up after the tiny compression using this candidate's params.
+      // circleCircleIntersection returns points in consistent order (same perpendicular
+      // direction to the pivot–frameMount axis), so index i is safe to use here.
+      const testEye = testEyeCandidates[i];
+      const pivotToTestEyeDist = distance(pivot, testEye);
+      const cosTestA =
+        (pivotToTestEyeDist * pivotToTestEyeDist +
+          pivotToAxleDist * pivotToAxleDist -
+          eyeToAxleDist * eyeToAxleDist) /
+        (2 * pivotToTestEyeDist * pivotToAxleDist);
+      if (cosTestA < -1 || cosTestA > 1) return false;
+      const testAngleAtPivot = Math.acos(cosTestA);
+      const testPivotToEyeAngle = angle(pivot, testEye);
+      const testAxleAngle = axleAngleIsPositive
+        ? testPivotToEyeAngle + testAngleAtPivot
+        : testPivotToEyeAngle - testAngleAtPivot;
+      const compressedNominalAxleY = pivot.y + pivotToAxleDist * Math.sin(testAxleAngle);
+      return compressedNominalAxleY > rearWheelRadius;
+    });
+    correctEyeIndex =
+      physicsIndex !== -1
+        ? physicsIndex
+        : eyeCandidates[0].x > eyeCandidates[1].x
+          ? 0
+          : 1;
+  } else {
+    // Fallback: compressed circles don't intersect, use X-coordinate heuristic.
+    correctEyeIndex = eyeCandidates[0].x > eyeCandidates[1].x ? 0 : 1;
+  }
+
+  const chosenEye = eyeCandidates[correctEyeIndex];
 
   const pivotToEyeDist = distance(pivot, chosenEye);
   const pivotToAxleDist = distance(pivot, axle);
