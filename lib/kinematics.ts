@@ -2,7 +2,8 @@
 import {
   BikeGeometry,
   KinematicState,
-  KinematicStateFirstPass,
+  KinematicPoint,
+  BikeState,
   AnalysisResults,
   Point2D,
   computedProperties,
@@ -19,6 +20,7 @@ import {
   tangentPoints,
   lineIntersection,
   lineIntersectionWithVertical,
+  degreesToRadians,
 } from "./geometry";
 
 interface RigidTriangle {
@@ -29,6 +31,17 @@ interface RigidTriangle {
   axleAngleIsPositive: boolean;
 }
 
+// Internal first-pass state — not exported
+interface FirstPassState {
+  travelMM: number;
+  rearAxlePosition: Point2D;
+  bbPosition: Point2D;
+  pivotPosition: Point2D;
+  swingarmEyePosition: Point2D;
+  shockLength: number;
+  proportionalForkStroke: number;
+}
+
 export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
   const rigidTriangle = establishRigidTriangle(geometry);
 
@@ -36,143 +49,147 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
   const strokeSteps = Math.floor(geometry.shockStroke / stepSize) + 1;
 
   // First pass: calculate basic geometric state from shock stroke only
-  const firstPassStates: (KinematicStateFirstPass & {
-    proportionalForkStroke: number;
-  })[] = [];
+  const firstPassStates: FirstPassState[] = [];
   for (let step = 0; step < strokeSteps; step++) {
-    const shockStroke = step * stepSize; // mm of shock compression
-
-    // Calculate proportional fork compression
+    const shockStroke = step * stepSize;
     const travelRatio = shockStroke / geometry.shockStroke;
     const proportionalForkStroke = travelRatio * geometry.forkTravel;
-
-    const state = calculateStateAtShockStroke(
-      shockStroke,
-      geometry,
-      rigidTriangle,
-    );
-
-    firstPassStates.push({
-      ...state,
-      proportionalForkStroke,
-    });
+    const state = calculateStateAtShockStroke(shockStroke, geometry, rigidTriangle);
+    firstPassStates.push({ ...state, proportionalForkStroke });
   }
 
-  // Second pass: extend first-pass states with derived values
-  const states: KinematicState[] = [];
+  // Second pass: build full BikeState with no dummy initialisation
+  const states: BikeState[] = [];
   const axlePath: Point2D[] = [];
   const frontAxlePath: Point2D[] = [];
 
   for (let i = 0; i < firstPassStates.length; i++) {
-    const firstPassState = firstPassStates[i];
+    const fp = firstPassStates[i];
 
-    // Calculate front axle position with proportional fork compression
+    // Front axle with proportional fork compression
     const htaRad = computedProperties.headTubeAngleRadians(geometry);
-    const effectiveForkLength =
-      geometry.forkLength - firstPassState.proportionalForkStroke;
-
+    const effectiveForkLength = geometry.forkLength - fp.proportionalForkStroke;
     const frontAxlePos: Point2D = {
       x:
-        firstPassState.bbPosition.x +
+        fp.bbPosition.x +
         geometry.reach +
         geometry.headTubeLength * Math.cos(htaRad) +
         effectiveForkLength * Math.cos(htaRad) +
         geometry.forkOffset * Math.sin(htaRad),
       y:
-        firstPassState.bbPosition.y +
+        fp.bbPosition.y +
         geometry.stack -
         geometry.headTubeLength * Math.sin(htaRad) -
         effectiveForkLength * Math.sin(htaRad) +
         geometry.forkOffset * Math.cos(htaRad),
     };
 
-    // Recalculate pitch angle with the actual front axle position
-    const dx = frontAxlePos.x - firstPassState.rearAxlePosition.x;
-    const dy = frontAxlePos.y - firstPassState.rearAxlePosition.y;
+    // Pitch angle from actual front axle position
+    const dx = frontAxlePos.x - fp.rearAxlePosition.x;
+    const dy = frontAxlePos.y - fp.rearAxlePosition.y;
     const centerDist = Math.sqrt(dx * dx + dy * dy);
-
     const centerAngle = Math.atan2(dy, dx);
     const frontWheelRadius = computedProperties.frontWheelRadius(geometry);
     const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
     const radiusDiff = frontWheelRadius - rearWheelRadius;
     const angleOffset = Math.asin(radiusDiff / centerDist);
-    const tangentAngle = centerAngle - angleOffset;
-    const pitchAngleDegrees = (tangentAngle * 180.0) / Math.PI;
+    const pitchAngleDegrees = ((centerAngle - angleOffset) * 180.0) / Math.PI;
 
-    // Create the full kinematic state by extending the first-pass state
-    const state: KinematicState = {
-      travelMM: firstPassState.travelMM,
-      rearAxlePosition: firstPassState.rearAxlePosition,
-      bbPosition: firstPassState.bbPosition,
-      pivotPosition: firstPassState.pivotPosition,
-      swingarmEyePosition: firstPassState.swingarmEyePosition,
-      shockLength: firstPassState.shockLength,
+    // Build pitch rotation function once for this state
+    const applyPitchRotation = getApplyPitchRotation(fp.rearAxlePosition, pitchAngleDegrees);
+    const toKP = (p: Point2D): KinematicPoint => ({
+      world: p,
+      wheelsOnGround: applyPitchRotation(p),
+    });
+
+    // Leverage ratio (numerical derivative)
+    let leverageRatio: number;
+    if (i === 0) {
+      if (firstPassStates.length > 1) {
+        const dTravel = firstPassStates[i + 1].travelMM - firstPassStates[i].travelMM;
+        leverageRatio = dTravel / stepSize;
+      } else {
+        leverageRatio = 1.0;
+      }
+    } else if (i === firstPassStates.length - 1) {
+      const dTravel = firstPassStates[i].travelMM - firstPassStates[i - 1].travelMM;
+      leverageRatio = dTravel / stepSize;
+    } else {
+      const dTravel = firstPassStates[i + 1].travelMM - firstPassStates[i - 1].travelMM;
+      leverageRatio = dTravel / (2 * stepSize);
+    }
+
+    const wheelRate = geometry.shockSpringRate / (leverageRatio * leverageRatio);
+
+    const antiSquat = calculateVisualAntiSquat(fp, frontAxlePos, geometry, applyPitchRotation);
+    const antiRise = calculateVisualAntiRise(fp, frontAxlePos, geometry, applyPitchRotation);
+    const trail = computeTrail(fp, frontAxlePos, geometry, applyPitchRotation);
+
+    // Geometry-derived positions
+    const headTubeTopWorld = computedProperties.headTubeTop(geometry, fp.bbPosition);
+    const headTubeBottomWorld = computedProperties.headTubeBottom(geometry, fp.bbPosition);
+    const seatAngleRad = degreesToRadians(geometry.seatAngle);
+    const seatTopWorld: Point2D = {
+      x: fp.bbPosition.x - geometry.seatTubeLength * Math.cos(seatAngleRad),
+      y: fp.bbPosition.y + geometry.seatTubeLength * Math.sin(seatAngleRad),
+    };
+    const cosHT = Math.cos(htaRad);
+    const sinHT = Math.sin(htaRad);
+    const forkBendWorld: Point2D = {
+      x: headTubeBottomWorld.x + effectiveForkLength * cosHT,
+      y: headTubeBottomWorld.y - effectiveForkLength * sinHT,
+    };
+    const shockFrameMountWorld: Point2D = {
+      x: fp.bbPosition.x + geometry.shockFrameMountX,
+      y: fp.bbPosition.y + geometry.shockFrameMountY,
+    };
+    const chainringCenterWorld: Point2D = {
+      x: fp.bbPosition.x + geometry.chainringOffsetX,
+      y: fp.bbPosition.y + geometry.chainringOffsetY,
+    };
+    const idlerWorld = idlerPositionFromWorld(
+      fp.bbPosition,
+      fp.pivotPosition,
+      fp.rearAxlePosition,
+      geometry,
+    );
+    const centreOfMassWorld: Point2D = {
+      x: fp.bbPosition.x + geometry.comX,
+      y: fp.bbPosition.y + geometry.comY,
+    };
+
+    const state: BikeState = {
+      travelMM: fp.travelMM,
+      shockLength: fp.shockLength,
       pitchAngleDegrees,
-      frontAxlePosition: frontAxlePos,
-      forkCompression: firstPassState.proportionalForkStroke,
-      leverageRatio: 0,
-      wheelRate: 0,
-      antiSquat: 0,
-      antiRise: 0,
+      forkCompression: fp.proportionalForkStroke,
+      rearAxle: toKP(fp.rearAxlePosition),
+      frontAxle: toKP(frontAxlePos),
+      bb: toKP(fp.bbPosition),
+      pivot: toKP(fp.pivotPosition),
+      swingarmEye: toKP(fp.swingarmEyePosition),
+      leverageRatio,
+      wheelRate,
+      antiSquat,
+      antiRise,
       pedalKickback: 0,
       chainGrowth: 0,
       totalChainGrowth: 0,
-      trail: 0,
+      trail,
       crankAngle: 0,
+      headTubeTop: toKP(headTubeTopWorld),
+      headTubeBottom: toKP(headTubeBottomWorld),
+      seatTop: toKP(seatTopWorld),
+      forkBend: toKP(forkBendWorld),
+      shockFrameMount: toKP(shockFrameMountWorld),
+      chainringCenter: toKP(chainringCenterWorld),
+      idler: idlerWorld ? toKP(idlerWorld) : null,
+      centreOfMass: toKP(centreOfMassWorld),
     };
-
-    // Calculate leverage ratio as dWheelTravel / dShockStroke (numerical derivative)
-    if (i === 0) {
-      // At first point: use forward difference
-      if (firstPassStates.length > 1) {
-        const wheelTravelDelta =
-          firstPassStates[i + 1].travelMM - firstPassStates[i].travelMM;
-        const shockStrokeDelta = stepSize;
-        state.leverageRatio =
-          shockStrokeDelta > 0 ? wheelTravelDelta / shockStrokeDelta : 1.0;
-      } else {
-        state.leverageRatio = 1.0;
-      }
-    } else if (i === firstPassStates.length - 1) {
-      // At last point: use backward difference
-      const wheelTravelDelta =
-        firstPassStates[i].travelMM - firstPassStates[i - 1].travelMM;
-      const shockStrokeDelta = stepSize;
-      state.leverageRatio =
-        shockStrokeDelta > 0 ? wheelTravelDelta / shockStrokeDelta : 1.0;
-    } else {
-      // In the middle: use central difference for better accuracy
-      const wheelTravelDelta =
-        firstPassStates[i + 1].travelMM - firstPassStates[i - 1].travelMM;
-      const shockStrokeDelta = 2 * stepSize;
-      state.leverageRatio =
-        shockStrokeDelta > 0 ? wheelTravelDelta / shockStrokeDelta : 1.0;
-    }
-
-    // Calculate wheel rate using actual leverage ratio
-    state.wheelRate =
-      geometry.shockSpringRate / (state.leverageRatio * state.leverageRatio);
-
-    // Calculate anti-squat and anti-rise from visual geometry
-    state.antiSquat = calculateVisualAntiSquat(state, geometry);
-    state.antiRise = calculateVisualAntiRise(state, geometry);
-
-    state.trail = computeTrail(state, geometry);
 
     states.push(state);
-
-    // Store wheel positions relative to BB
-    const rearRelativeToBB: Point2D = {
-      x: state.rearAxlePosition.x - state.bbPosition.x,
-      y: state.rearAxlePosition.y - state.bbPosition.y,
-    };
-    const frontRelativeToBB: Point2D = {
-      x: state.frontAxlePosition.x - state.bbPosition.x,
-      y: state.frontAxlePosition.y - state.bbPosition.y,
-    };
-
-    axlePath.push(rearRelativeToBB);
-    frontAxlePath.push(frontRelativeToBB);
+    axlePath.push(Point2D.subtract(fp.rearAxlePosition, fp.bbPosition));
+    frontAxlePath.push(Point2D.subtract(frontAxlePos, fp.bbPosition));
   }
 
   return { states, axlePath, frontAxlePath };
@@ -181,7 +198,6 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
 function establishRigidTriangle(geometry: BikeGeometry): RigidTriangle {
   const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
 
-  // At top-out: BB is at bbHeight, shock is at shockETE
   const pivot: Point2D = {
     x: geometry.bbToPivotX,
     y: geometry.bbHeight + geometry.bbToPivotY,
@@ -213,8 +229,7 @@ function establishRigidTriangle(geometry: BikeGeometry): RigidTriangle {
 
   const verticalDist = rearWheelRadius - pivot.y;
   const horizontalDistSquared =
-    geometry.swingarmLength * geometry.swingarmLength -
-    verticalDist * verticalDist;
+    geometry.swingarmLength * geometry.swingarmLength - verticalDist * verticalDist;
 
   if (horizontalDistSquared < 0) {
     return {
@@ -227,10 +242,8 @@ function establishRigidTriangle(geometry: BikeGeometry): RigidTriangle {
   }
 
   const horizontalDist = Math.sqrt(horizontalDistSquared);
-
   const axle1: Point2D = { x: pivot.x + horizontalDist, y: rearWheelRadius };
   const axle2: Point2D = { x: pivot.x - horizontalDist, y: rearWheelRadius };
-
   const axle = axle1.x < axle2.x ? axle1 : axle2;
 
   const pivotToEyeDist = distance(pivot, chosenEye);
@@ -242,11 +255,9 @@ function establishRigidTriangle(geometry: BikeGeometry): RigidTriangle {
       pivotToAxleDist * pivotToAxleDist -
       eyeToAxleDist * eyeToAxleDist) /
     (2 * pivotToEyeDist * pivotToAxleDist);
-  // const angleAtPivot = Math.acos(Math.max(-1, Math.min(1, cosAngle)));
   const angleAtPivot = Math.acos(cosAngle);
 
   const pivotToEyeAngle = angle(pivot, chosenEye);
-  // const pivotToAxleAngle = angle(pivot, axle);
 
   const testAnglePlus = pivotToEyeAngle + angleAtPivot;
   const testAngleMinus = pivotToEyeAngle - angleAtPivot;
@@ -262,7 +273,6 @@ function establishRigidTriangle(geometry: BikeGeometry): RigidTriangle {
 
   const distPlus = distance(testAxlePlus, axle);
   const distMinus = distance(testAxleMinus, axle);
-
   const axleAngleIsPositive = distPlus < distMinus;
 
   return {
@@ -278,9 +288,8 @@ function calculateStateAtShockStroke(
   shockStroke: number,
   geometry: BikeGeometry,
   rigidTriangle: RigidTriangle,
-): KinematicStateFirstPass {
+): Omit<FirstPassState, "proportionalForkStroke"> {
   const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
-  // const frontWheelRadius = computedProperties.frontWheelRadius(geometry);
 
   const eyeToAxleDistance = rigidTriangle.eyeToAxle;
   const currentShockLength = geometry.shockETE - shockStroke;
@@ -309,20 +318,14 @@ function calculateStateAtShockStroke(
       pivotPosition: pivot,
       swingarmEyePosition: { x: 0, y: 0 },
       shockLength: currentShockLength,
-      pitchAngleDegrees: 0,
     };
   }
 
-  // CRITICAL: Always use the same eye candidate index determined at top-out
-  // This locks in the triangle orientation and prevents flipping
   const chosenEye = eyeCandidates[rigidTriangle.correctEyeIndex];
 
-  // Find axle using rigid triangle constraint
-  // We know: pivot position, eye position, all three side lengths (fixed)
   const pivotToEyeDist = distance(pivot, chosenEye);
   const pivotToAxleDist = rigidTriangle.pivotToAxle;
 
-  // Law of cosines: angle at pivot in the triangle
   const cosAngle =
     (pivotToEyeDist * pivotToEyeDist +
       pivotToAxleDist * pivotToAxleDist -
@@ -331,35 +334,21 @@ function calculateStateAtShockStroke(
   const angleAtPivot = Math.acos(cosAngle);
 
   const pivotToEyeAngle = angle(pivot, chosenEye);
-
-  // Use the rigid triangle orientation to pick the correct axle
-  // No tracking or selection needed - the orientation is fixed throughout travel!
   const axleAngle = rigidTriangle.axleAngleIsPositive
-    ? pivotToEyeAngle + angleAtPivot // Positive: add angle
-    : pivotToEyeAngle - angleAtPivot; // Negative: subtract angle
+    ? pivotToEyeAngle + angleAtPivot
+    : pivotToEyeAngle - angleAtPivot;
 
   const nominalAxle: Point2D = {
     x: pivot.x + pivotToAxleDist * Math.cos(axleAngle),
     y: pivot.y + pivotToAxleDist * Math.sin(axleAngle),
   };
 
-  // Adjust entire frame DOWN so rear axle is on ground
   const groundOffset = nominalAxle.y - rearWheelRadius;
   const bbY = geometry.bbHeight - groundOffset;
 
-  // Final positions (no pitch adjustment)
-  const rearAxlePos: Point2D = {
-    x: nominalAxle.x,
-    y: rearWheelRadius,
-  };
-  const bbPos: Point2D = {
-    x: 0,
-    y: bbY,
-  };
-  const pivotPos: Point2D = {
-    x: geometry.bbToPivotX,
-    y: pivot.y - groundOffset,
-  };
+  const rearAxlePos: Point2D = { x: nominalAxle.x, y: rearWheelRadius };
+  const bbPos: Point2D = { x: 0, y: bbY };
+  const pivotPos: Point2D = { x: geometry.bbToPivotX, y: pivot.y - groundOffset };
   const swingarmEyePos: Point2D = {
     x: chosenEye.x,
     y: chosenEye.y - groundOffset,
@@ -369,66 +358,31 @@ function calculateStateAtShockStroke(
     y: bbY + geometry.shockFrameMountY,
   };
 
-  // Calculate front wheel position
-  const htaRad = geometry.headAngle * (Math.PI / 180);
-  const frontAxlePos: Point2D = {
-    x:
-      bbPos.x +
-      geometry.reach +
-      geometry.headTubeLength * Math.cos(htaRad) +
-      geometry.forkLength * Math.cos(htaRad) +
-      geometry.forkOffset * Math.sin(htaRad),
-    y:
-      bbPos.y +
-      geometry.stack -
-      geometry.headTubeLength * Math.sin(htaRad) -
-      geometry.forkLength * Math.sin(htaRad) +
-      geometry.forkOffset * Math.cos(htaRad),
-  };
-
-  // Calculate pitch angle
-  const dx = frontAxlePos.x - rearAxlePos.x;
-  const dy = frontAxlePos.y - rearAxlePos.y;
-  const centerDist = Math.sqrt(dx * dx + dy * dy);
-
-  const centerAngle = Math.atan2(dy, dx);
-  const frontWheelRadius = computedProperties.frontWheelRadius(geometry);
-  const radiusDiff = frontWheelRadius - rearWheelRadius;
-  const angleOffset = Math.asin(radiusDiff / centerDist);
-  const tangentAngle = centerAngle - angleOffset;
-
-  const pitchAngleDegrees = (tangentAngle * 180.0) / Math.PI;
-
-  // Calculate wheel travel
+  const shockLength = distance(finalFrameMount, swingarmEyePos);
   const wheelTravel = Math.abs(geometry.bbHeight - bbY);
 
-  // Calculate shock length with adjusted frame position
-  const shockLength = distance(finalFrameMount, swingarmEyePos);
-
-  const state: KinematicStateFirstPass = {
+  return {
     travelMM: wheelTravel,
     rearAxlePosition: rearAxlePos,
     bbPosition: bbPos,
     pivotPosition: pivotPos,
     swingarmEyePosition: swingarmEyePos,
     shockLength,
-    pitchAngleDegrees,
   };
-
-  return state;
 }
 
-export const getIdlerPosition = (
-  state: KinematicState,
+// Internal helper: resolves idler position from raw world-frame points.
+// Used both during KinematicState construction and via the public getIdlerPosition.
+function idlerPositionFromWorld(
+  bbPos: Point2D,
+  pivotPos: Point2D,
+  rearAxlePos: Point2D,
   geometry: BikeGeometry,
-): Point2D | null => {
+): Point2D | null {
   if (geometry.idlerType === IdlerType.None) {
     return null;
   } else if (geometry.idlerType === IdlerType.FrameMounted) {
-    return Point2D.add(state.bbPosition, {
-      x: geometry.idlerX,
-      y: geometry.idlerY,
-    });
+    return Point2D.add(bbPos, { x: geometry.idlerX, y: geometry.idlerY });
   } else {
     // Swingarm-mounted idler
     const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
@@ -440,7 +394,6 @@ export const getIdlerPosition = (
       x: geometry.bbToPivotX,
       y: geometry.bbHeight + geometry.bbToPivotY,
     };
-
     const topOutPivotToAxleVertDist = rearWheelRadius - topOutPivot.y;
     const topOutPivotToAxleHorizDist = Math.sqrt(
       geometry.swingarmLength * geometry.swingarmLength -
@@ -454,50 +407,59 @@ export const getIdlerPosition = (
       topOutPivot,
       topOutAxle,
       topOutIdler,
-      state.pivotPosition,
-      state.rearAxlePosition,
+      pivotPos,
+      rearAxlePos,
     );
   }
-};
+}
 
-const getFrontSprocketCircle = (
+export const getIdlerPosition = (
   state: KinematicState,
   geometry: BikeGeometry,
-): Circle => {
-  if (
-    geometry.idlerType === IdlerType.None ||
-    geometry.idlerType === IdlerType.SwingarmMounted
-  ) {
-    const center = Point2D.add(state.bbPosition, {
+): Point2D | null => {
+  return idlerPositionFromWorld(
+    state.bb.world,
+    state.pivot.world,
+    state.rearAxle.world,
+    geometry,
+  );
+};
+
+function getFrontSprocketCircle(
+  bbPos: Point2D,
+  pivotPos: Point2D,
+  rearAxlePos: Point2D,
+  geometry: BikeGeometry,
+): Circle {
+  if (geometry.idlerType === IdlerType.None) {
+    const center = Point2D.add(bbPos, {
       x: geometry.chainringOffsetX,
       y: geometry.chainringOffsetY,
     });
-    const radius = sprocketRadius(geometry.chainringTeeth);
-    return { center, radius };
+    return { center, radius: sprocketRadius(geometry.chainringTeeth) };
   } else {
     const radius = sprocketRadius(geometry.idlerTeeth);
-    const center = getIdlerPosition(state, geometry)!;
+    const center = idlerPositionFromWorld(bbPos, pivotPos, rearAxlePos, geometry)!;
     return { center, radius };
   }
-};
+}
 
-const getRearSprocketCircle = (
-  state: KinematicState,
+function getRearSprocketCircle(
+  bbPos: Point2D,
+  pivotPos: Point2D,
+  rearAxlePos: Point2D,
   geometry: BikeGeometry,
-): Circle => {
+): Circle {
   if (
     geometry.idlerType === IdlerType.None ||
     geometry.idlerType === IdlerType.FrameMounted
   ) {
-    const center = state.rearAxlePosition;
-    const radius = sprocketRadius(geometry.cogTeeth);
-    return { center, radius };
+    return { center: rearAxlePos, radius: sprocketRadius(geometry.cogTeeth) };
   } else {
-    const center = getIdlerPosition(state, geometry)!;
-    const radius = sprocketRadius(geometry.idlerTeeth);
-    return { center, radius };
+    const center = idlerPositionFromWorld(bbPos, pivotPos, rearAxlePos, geometry)!;
+    return { center, radius: sprocketRadius(geometry.idlerTeeth) };
   }
-};
+}
 
 export const getApplyPitchRotation =
   (rearAxle: Point2D, pitchAngleDegrees: number) => (point: Point2D) => {
@@ -518,13 +480,14 @@ export function getRotatedCentreOfMass(
   applyPitchRotation: (p: Point2D) => Point2D,
 ): Point2D {
   return applyPitchRotation(
-    Point2D.add(state.bbPosition, {
+    Point2D.add(state.bb.world, {
       x: geometry.comX,
       y: geometry.comY,
     }),
   );
 }
 
+// ---- Anti-squat types (exported for Calculations.tsx) ----
 type AntiSquatStep1 = {
   chainForce: LineSegment;
   suspensionForce: LineSegment;
@@ -537,31 +500,31 @@ type AntiSquatFinal = AntiSquatStep2 & {
   antiSquatIntersection: Point2D;
   centreOfMassHeight: number;
 };
-
 type AntiSquatCalculations = AntiSquatStep1 | AntiSquatStep2 | AntiSquatFinal;
 
-export const doAntiSquatCalculations = (
-  state: KinematicState,
+// Internal: shared anti-squat computation using raw world-frame points + pre-built applyPitchRotation
+function computeAntiSquatSteps(
+  bbPos: Point2D,
+  pivotPos: Point2D,
+  rearAxlePos: Point2D,
+  frontAxlePos: Point2D,
+  applyPitchRotation: (p: Point2D) => Point2D,
   geometry: BikeGeometry,
-  {
-    sprocketTangent = true,
-    warn = false,
-  }: { sprocketTangent?: boolean; warn?: boolean } = {},
-): AntiSquatCalculations => {
-  const applyPitchRotation = getApplyPitchRotation(
-    state.rearAxlePosition,
-    state.pitchAngleDegrees,
-  );
-  const frontSprocket = getFrontSprocketCircle(state, geometry);
+  opts: { sprocketTangent?: boolean; warn?: boolean } = {},
+): AntiSquatCalculations {
+  const { sprocketTangent = true, warn = false } = opts;
+
+  const frontSprocket = getFrontSprocketCircle(bbPos, pivotPos, rearAxlePos, geometry);
   const frontSprocketRotated = {
     center: applyPitchRotation(frontSprocket.center),
     radius: frontSprocket.radius,
   };
-  const rearSprocket = getRearSprocketCircle(state, geometry);
+  const rearSprocket = getRearSprocketCircle(bbPos, pivotPos, rearAxlePos, geometry);
   const rearSprocketRotated = {
     center: applyPitchRotation(rearSprocket.center),
     radius: rearSprocket.radius,
   };
+
   const { start: chainlineStart, end: chainlineEnd } = sprocketTangent
     ? tangentPoints(
         frontSprocketRotated.center,
@@ -571,19 +534,21 @@ export const doAntiSquatCalculations = (
       )
     : { start: frontSprocketRotated.center, end: rearSprocketRotated.center };
 
-  const instantCenter = applyPitchRotation(state.pivotPosition);
-  const rearAxleRotated = applyPitchRotation(state.rearAxlePosition);
-  const frontAxleRotated = applyPitchRotation(state.frontAxlePosition);
+  const instantCenter = applyPitchRotation(pivotPos);
+  const rearAxleRotated = applyPitchRotation(rearAxlePos);
+  const frontAxleRotated = applyPitchRotation(frontAxlePos);
   const instantForceCenter = lineIntersection(
     chainlineStart,
     chainlineEnd,
     instantCenter,
     rearAxleRotated,
   );
+
   const calculations: AntiSquatStep1 = {
     chainForce: { start: chainlineStart, end: chainlineEnd },
     suspensionForce: { start: instantCenter, end: rearAxleRotated },
   };
+
   if (!instantForceCenter) {
     if (warn)
       console.warn(
@@ -599,6 +564,7 @@ export const doAntiSquatCalculations = (
     instantForceLine: { start: instantForceCenter, end: rearContactPatch },
     frontContactPatch: { x: frontAxleRotated.x, y: 0 },
   };
+
   const antiSquatIntersection = lineIntersectionWithVertical(
     rearContactPatch,
     instantForceCenter,
@@ -609,10 +575,8 @@ export const doAntiSquatCalculations = (
     return calculations2;
   }
 
-  const centreOfMassHeight = getRotatedCentreOfMass(
-    state,
-    geometry,
-    applyPitchRotation,
+  const centreOfMassHeight = applyPitchRotation(
+    Point2D.add(bbPos, { x: geometry.comX, y: geometry.comY }),
   ).y;
 
   return {
@@ -620,37 +584,59 @@ export const doAntiSquatCalculations = (
     centreOfMassHeight,
     antiSquatIntersection,
   } satisfies AntiSquatFinal;
+}
+
+// Exported: used by Calculations.tsx to display anti-squat force lines
+export const doAntiSquatCalculations = (
+  state: KinematicState,
+  geometry: BikeGeometry,
+  opts: { sprocketTangent?: boolean; warn?: boolean } = {},
+): AntiSquatCalculations => {
+  const applyPitchRotation = getApplyPitchRotation(
+    state.rearAxle.world,
+    state.pitchAngleDegrees,
+  );
+  return computeAntiSquatSteps(
+    state.bb.world,
+    state.pivot.world,
+    state.rearAxle.world,
+    state.frontAxle.world,
+    applyPitchRotation,
+    geometry,
+    opts,
+  );
 };
 
 function calculateVisualAntiSquat(
-  state: KinematicState,
+  fp: FirstPassState,
+  frontAxlePos: Point2D,
   geometry: BikeGeometry,
-  { sprocketTangent = true }: { sprocketTangent?: boolean } = {},
+  applyPitchRotation: (p: Point2D) => Point2D,
+  opts: { sprocketTangent?: boolean } = {},
 ): number {
-  const calculations = doAntiSquatCalculations(state, geometry, {
-    sprocketTangent,
-    warn: false,
-  });
-  if (!("antiSquatIntersection" in calculations)) {
-    return 0;
-  }
+  const calculations = computeAntiSquatSteps(
+    fp.bbPosition,
+    fp.pivotPosition,
+    fp.rearAxlePosition,
+    frontAxlePos,
+    applyPitchRotation,
+    geometry,
+    opts,
+  );
+  if (!("antiSquatIntersection" in calculations)) return 0;
   const { antiSquatIntersection, centreOfMassHeight } = calculations;
   return (antiSquatIntersection.y / centreOfMassHeight) * 100;
 }
 
 function calculateVisualAntiRise(
-  state: KinematicState,
+  fp: FirstPassState,
+  frontAxlePos: Point2D,
   geometry: BikeGeometry,
+  applyPitchRotation: (p: Point2D) => Point2D,
 ): number {
-  
-  const applyPitchRotation = getApplyPitchRotation(
-    state.rearAxlePosition,
-    state.pitchAngleDegrees,
-  );
-
-  const instantCenter = applyPitchRotation(state.pivotPosition);
-  const rearAxleRotated = applyPitchRotation(state.rearAxlePosition);
-  const frontAxleRotated = applyPitchRotation(state.frontAxlePosition);
+  const instantCenter = applyPitchRotation(fp.pivotPosition);
+  const rearAxleRotated = applyPitchRotation(fp.rearAxlePosition);
+  const frontAxleRotated = applyPitchRotation(frontAxlePos);
 
   const antiriseIntersection = lineIntersectionWithVertical(
     rearAxleRotated,
@@ -665,31 +651,23 @@ function calculateVisualAntiRise(
     });
     return 0;
   }
-  const centreOfMassHeight = getRotatedCentreOfMass(
-    state,
-    geometry,
-    applyPitchRotation,
-  ).y;
 
+  const centreOfMassHeight = applyPitchRotation(
+    Point2D.add(fp.bbPosition, { x: geometry.comX, y: geometry.comY }),
+  ).y;
   return (antiriseIntersection.y / centreOfMassHeight) * 100;
 }
 
-function computeTrail(state: KinematicState, geometry: BikeGeometry): number {
-  // Calculate perpendicular distance from contact patch to head tube line (in screen/pitch-rotated space)
-  const contactPatch = { x: state.frontAxlePosition.x, y: 0 };
-  const applyPitchRotation = getApplyPitchRotation(
-    state.rearAxlePosition,
-    state.pitchAngleDegrees,
-  );
-
-  const headtubeTop = computedProperties.headTubeTop(
-    geometry,
-    state.bbPosition,
-  );
-  const headtubeBottom = computedProperties.headTubeBottom(
-    geometry,
-    state.bbPosition,
-  );
+function computeTrail(
+  fp: FirstPassState,
+  frontAxlePos: Point2D,
+  geometry: BikeGeometry,
+  applyPitchRotation: (p: Point2D) => Point2D,
+): number {
+  const frontAxleRotated = applyPitchRotation(frontAxlePos);
+  const contactPatch = { x: frontAxleRotated.x, y: 0 };
+  const headtubeTop = computedProperties.headTubeTop(geometry, fp.bbPosition);
+  const headtubeBottom = computedProperties.headTubeBottom(geometry, fp.bbPosition);
   const htTopRotated = applyPitchRotation(headtubeTop);
   const htBottomRotated = applyPitchRotation(headtubeBottom);
 
@@ -698,9 +676,6 @@ function computeTrail(state: KinematicState, geometry: BikeGeometry): number {
     htVector.y * (contactPatch.x - htTopRotated.x) -
       htVector.x * (contactPatch.y - htTopRotated.y),
   );
-  const denominator = Math.sqrt(
-    htVector.x * htVector.x + htVector.y * htVector.y,
-  );
+  const denominator = Math.sqrt(htVector.x * htVector.x + htVector.y * htVector.y);
   return numerator / denominator;
 }
-

@@ -1,26 +1,8 @@
-import { getApplyPitchRotation } from "@/lib/kinematics";
 import { DrawComponentProps } from "./types";
-import { Point2D } from "@/lib/types";
 
-export const CentreOfMass = ({
-  state,
-  conversion,
-  geometry,
-}: DrawComponentProps) => {
+export const CentreOfMass = ({ state, conversion }: DrawComponentProps) => {
   const { toCanvas } = conversion;
-  const applyPitchRotation = getApplyPitchRotation(
-    state.rearAxlePosition,
-    state.pitchAngleDegrees,
-  );
-  // TODO: Do we need to add CoM before or after pitch rotation>
-  const comRotated = applyPitchRotation(
-    Point2D.add(state.bbPosition, {
-      x: geometry.comX,
-      y: geometry.comY,
-    }),
-  );
-
-  const comCanvas = toCanvas(comRotated);
+  const comCanvas = toCanvas(state.centreOfMass.wheelsOnGround);
 
   return (
     <circle

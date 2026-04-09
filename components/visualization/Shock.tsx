@@ -1,18 +1,9 @@
-import { getApplyPitchRotation } from "@/lib/kinematics";
 import { DrawComponentProps } from "./types";
 
-export const Shock = ({ conversion, state, geometry }: DrawComponentProps) => {
+export const Shock = ({ conversion, state }: DrawComponentProps) => {
   const { toCanvasX, toCanvasY } = conversion;
-  const applyPitchRotation = getApplyPitchRotation(
-    state.rearAxlePosition,
-    state.pitchAngleDegrees,
-  );
-  const frameMountRotated = applyPitchRotation({
-    x: state.bbPosition.x + geometry.shockFrameMountX,
-    y: state.bbPosition.y + geometry.shockFrameMountY,
-  });
-
-  const shockEyePosRotated = applyPitchRotation(state.swingarmEyePosition);
+  const frameMountRotated = state.shockFrameMount.wheelsOnGround;
+  const shockEyePosRotated = state.swingarmEye.wheelsOnGround;
 
   return (
     <>

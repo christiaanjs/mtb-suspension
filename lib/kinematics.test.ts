@@ -19,30 +19,30 @@ describe("Rigid Triangle Constraint", () => {
 
     // Calculate triangle sides at first state (top-out)
     const firstPivotToEye = distance(
-      firstState.pivotPosition,
-      firstState.swingarmEyePosition,
+      firstState.pivot.world,
+      firstState.swingarmEye.world,
     );
     const firstPivotToAxle = distance(
-      firstState.pivotPosition,
-      firstState.rearAxlePosition,
+      firstState.pivot.world,
+      firstState.rearAxle.world,
     );
     const firstEyeToAxle = distance(
-      firstState.swingarmEyePosition,
-      firstState.rearAxlePosition,
+      firstState.swingarmEye.world,
+      firstState.rearAxle.world,
     );
 
     // Calculate triangle sides at last state (full compression)
     const lastPivotToEye = distance(
-      lastState.pivotPosition,
-      lastState.swingarmEyePosition,
+      lastState.pivot.world,
+      lastState.swingarmEye.world,
     );
     const lastPivotToAxle = distance(
-      lastState.pivotPosition,
-      lastState.rearAxlePosition,
+      lastState.pivot.world,
+      lastState.rearAxle.world,
     );
     const lastEyeToAxle = distance(
-      lastState.swingarmEyePosition,
-      lastState.rearAxlePosition,
+      lastState.swingarmEye.world,
+      lastState.rearAxle.world,
     );
 
     // The swingarm is rigid, so these distances should be constant throughout travel
@@ -63,7 +63,7 @@ describe("Rigid Triangle Constraint", () => {
     const TOLERANCE = 0.1; // mm
 
     for (const state of results.states) {
-      const pivotToAxle = distance(state.pivotPosition, state.rearAxlePosition);
+      const pivotToAxle = distance(state.pivot.world, state.rearAxle.world);
       expect(Math.abs(pivotToAxle - geometry.swingarmLength)).toBeLessThan(
         TOLERANCE,
       );
@@ -79,28 +79,28 @@ describe("Rigid Triangle Constraint", () => {
 
     // Reference triangle sides at top-out
     const referencePivotToEye = distance(
-      firstState.pivotPosition,
-      firstState.swingarmEyePosition,
+      firstState.pivot.world,
+      firstState.swingarmEye.world,
     );
     const referencePivotToAxle = distance(
-      firstState.pivotPosition,
-      firstState.rearAxlePosition,
+      firstState.pivot.world,
+      firstState.rearAxle.world,
     );
     const referenceEyeToAxle = distance(
-      firstState.swingarmEyePosition,
-      firstState.rearAxlePosition,
+      firstState.swingarmEye.world,
+      firstState.rearAxle.world,
     );
 
     // Check that all states maintain the same triangle geometry
     for (const state of results.states) {
       const pivotToEye = distance(
-        state.pivotPosition,
-        state.swingarmEyePosition,
+        state.pivot.world,
+        state.swingarmEye.world,
       );
-      const pivotToAxle = distance(state.pivotPosition, state.rearAxlePosition);
+      const pivotToAxle = distance(state.pivot.world, state.rearAxle.world);
       const eyeToAxle = distance(
-        state.swingarmEyePosition,
-        state.rearAxlePosition,
+        state.swingarmEye.world,
+        state.rearAxle.world,
       );
 
       expect(Math.abs(pivotToEye - referencePivotToEye)).toBeLessThan(
@@ -143,18 +143,18 @@ describe("Rigid Triangle Constraint", () => {
 
       // Rear wheel contact point (always at ground level, x = rear axle x)
       const rearContactGround = {
-        x: state.rearAxlePosition.x,
+        x: state.rearAxle.world.x,
         y: 0, // ground level
       };
 
       // Rotate both axles by pitch angle (rotation center is rear axle on ground)
       const rotatedRearAxle = applyPitchRotation(
-        state.rearAxlePosition,
+        state.rearAxle.world,
         rearContactGround,
         state.pitchAngleDegrees,
       );
       const rotatedFrontAxle = applyPitchRotation(
-        state.frontAxlePosition,
+        state.frontAxle.world,
         rearContactGround,
         state.pitchAngleDegrees,
       );
@@ -301,8 +301,8 @@ describe("getIdlerPosition", () => {
     });
     const result = getIdlerPosition(baseState, geometry);
     expect(result).not.toBeNull();
-    expect(result?.x).toBeCloseTo(baseState.bbPosition.x + (-60));
-    expect(result?.y).toBeCloseTo(baseState.bbPosition.y + 160);
+    expect(result?.x).toBeCloseTo(baseState.bb.world.x + (-60));
+    expect(result?.y).toBeCloseTo(baseState.bb.world.y + 160);
   });
 
   it("returns a point for swingarm-mounted idler", () => {
@@ -351,7 +351,7 @@ describe("getRotatedCentreOfMass", () => {
     const state = results.states[0];
     const geometry = createDefaultGeometry();
     const applyPitch = getApplyPitchRotation(
-      state.rearAxlePosition,
+      state.rearAxle.world,
       state.pitchAngleDegrees,
     );
     const com = getRotatedCentreOfMass(state, geometry, applyPitch);
@@ -366,14 +366,13 @@ describe("getRotatedCentreOfMass", () => {
     const results = runKinematicAnalysis(geometry);
     const state = results.states[0]; // top-out: pitch ≈ 0
     const applyPitch = getApplyPitchRotation(
-      state.rearAxlePosition,
+      state.rearAxle.world,
       state.pitchAngleDegrees,
     );
     const com = getRotatedCentreOfMass(state, geometry, applyPitch);
-    // At near-zero pitch the rotated CoM y is approximately bbPosition.y + comY
+    // At near-zero pitch the rotated CoM y is approximately bb.world.y + comY
     // Allow a few mm tolerance for the small but non-zero pitch angle
-    expect(com.y).toBeCloseTo(state.bbPosition.y + geometry.comY, -1);
+    expect(com.y).toBeCloseTo(state.bb.world.y + geometry.comY, -1);
   });
 });
-
 

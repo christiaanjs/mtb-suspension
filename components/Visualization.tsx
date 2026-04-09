@@ -54,8 +54,8 @@ export function BikeVisualization({
       Math.max(0, Math.min(stateIndex, analysisResults.states.length - 1))
     ];
 
-  const rearAxleWorld = state.rearAxlePosition;
-  const frontAxleWorld = state.frontAxlePosition;
+  const rearAxleWorld = state.rearAxle.world;
+  const frontAxleWorld = state.frontAxle.world;
 
   // Calculate canvas bounds
   const padding = 50;
@@ -143,8 +143,7 @@ export function AnimationView({
   animationSpeed,
   ...props
 }: AnimationViewProps) {
-  const axlePath = props.analysisResults.states.map((s) => s.rearAxlePosition);
-  console.log("Axle path:", axlePath);
+  const axlePath = props.analysisResults.states.map((s) => s.rearAxle.world);
   const [animProgress, setAnimProgress] = React.useState(
     initialTravelPercentage,
   );

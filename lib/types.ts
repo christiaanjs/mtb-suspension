@@ -142,43 +142,54 @@ export function createDefaultGeometry({
   };
 }
 
-// First pass: kinematic state calculated from shock stroke only
-export interface KinematicStateFirstPass {
-  travelMM: number;
-  rearAxlePosition: Point2D;
-  bbPosition: Point2D;
-  pivotPosition: Point2D;
-  swingarmEyePosition: Point2D;
-  shockLength: number;
-  pitchAngleDegrees: number;
+// A position stored in both the kinematic ground frame and the pitch-rotated frame
+export interface KinematicPoint {
+  world: Point2D;          // Kinematic ground frame (Y=0 is ground, rear wheel at Y=rearWheelRadius)
+  wheelsOnGround: Point2D; // Pitch-rotated around rear axle (both contact patches level)
 }
 
-// Complete kinematic state (first pass + second pass calculations)
-export interface KinematicState extends KinematicStateFirstPass {
-  // Geometry - calculated in second pass (front axle and pitch-dependent values)
-  frontAxlePosition: Point2D;
+export interface KinematicState {
+  travelMM: number;
+  shockLength: number;
+  pitchAngleDegrees: number;
   forkCompression: number;
 
-  // Dynamics - calculated in second pass (derivatives and derived values)
+  // Key frame positions in both coordinate systems
+  rearAxle: KinematicPoint;
+  frontAxle: KinematicPoint;
+  bb: KinematicPoint;
+  pivot: KinematicPoint;
+  swingarmEye: KinematicPoint;
+
+  // Dynamics
   leverageRatio: number;
   wheelRate: number;
   antiSquat: number;
   antiRise: number;
-
-  // Drivetrain - calculated in second pass
-  pedalKickback: number;
-  chainGrowth: number;
-  totalChainGrowth: number;
-
-  // Trail - calculated in second pass (depends on pitch rotation)
+  pedalKickback: number;    // unimplemented, always 0
+  chainGrowth: number;      // unimplemented, always 0
+  totalChainGrowth: number; // unimplemented, always 0
   trail: number;
+  crankAngle: number;       // unimplemented, always 0
+}
 
-  // Crank angle - calculated from pedal kickback
-  crankAngle: number;
+// Extends KinematicState with geometry-derived positions, computed once per state
+export interface BikeState extends KinematicState {
+  // Frame tube endpoints
+  headTubeTop: KinematicPoint;
+  headTubeBottom: KinematicPoint;
+  seatTop: KinematicPoint;
+  forkBend: KinematicPoint; // end of stanchions (before axle offset)
+
+  // Component positions
+  shockFrameMount: KinematicPoint;
+  chainringCenter: KinematicPoint;
+  idler: KinematicPoint | null;
+  centreOfMass: KinematicPoint;
 }
 
 export interface AnalysisResults {
-  states: KinematicState[];
+  states: BikeState[];
   axlePath: Point2D[];
   frontAxlePath: Point2D[];
 }

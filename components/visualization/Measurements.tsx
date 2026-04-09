@@ -1,6 +1,5 @@
 import { computedProperties } from "@/lib/types";
 import { DrawComponentProps } from "./types";
-import { getApplyPitchRotation } from "@/lib/kinematics";
 
 export const Measurements = ({
   conversion,
@@ -8,13 +7,9 @@ export const Measurements = ({
   geometry,
 }: DrawComponentProps) => {
   const { toCanvasX, toCanvasY, scale, height, padding } = conversion;
-  const applyPitchRotation = getApplyPitchRotation(
-    state.rearAxlePosition,
-    state.pitchAngleDegrees,
-  );
-  const bbPosRotated = applyPitchRotation(state.bbPosition);
-  const rearAxlePosRotated = applyPitchRotation(state.rearAxlePosition);
-  const frontAxleRotated = applyPitchRotation(state.frontAxlePosition);
+  const bbPosRotated = state.bb.wheelsOnGround;
+  const rearAxlePosRotated = state.rearAxle.wheelsOnGround;
+  const frontAxleRotated = state.frontAxle.wheelsOnGround;
 
   const groundY = toCanvasY(computedProperties.rearWheelRadius(geometry));
   const bbScreenX = toCanvasX(bbPosRotated.x);
@@ -22,7 +17,7 @@ export const Measurements = ({
   const rearAxleScreenX = toCanvasX(rearAxlePosRotated.x);
   const frontAxleScreenX = toCanvasX(frontAxleRotated.x);
 
-  const bbHeight = state.bbPosition.y;
+  const bbHeight = state.bb.world.y;
   const rearCenter = Math.abs(rearAxlePosRotated.x - bbPosRotated.x);
   const frontCenter = Math.abs(frontAxleRotated.x - bbPosRotated.x) / scale;
 
@@ -144,9 +139,9 @@ export const Measurements = ({
 
       {/* F/R Balance */}
       {(() => {
-        const wheelbase = state.frontAxlePosition.x - state.rearAxlePosition.x;
-        const comX = state.bbPosition.x + geometry.comX;
-        const distanceFromRear = comX - state.rearAxlePosition.x;
+        const wheelbase = state.frontAxle.world.x - state.rearAxle.world.x;
+        const comX = state.bb.world.x + geometry.comX;
+        const distanceFromRear = comX - state.rearAxle.world.x;
         const frontPercentage = (distanceFromRear / wheelbase) * 100;
         const rearPercentage = 100 - frontPercentage;
 

@@ -1,22 +1,14 @@
-import { getApplyPitchRotation } from "@/lib/kinematics";
 import { DrawComponentProps } from "./types";
 import { pointsToPolylineString } from "./lib";
 
-
-
 export const Swingarm = ({ state, conversion }: DrawComponentProps) => {
-  const applyPitchRotation = getApplyPitchRotation(
-    state.rearAxlePosition,
-    state.pitchAngleDegrees,
-  );
   const { toCanvas } = conversion;
-  const statePoints = [
-    state.pivotPosition,
-    state.swingarmEyePosition,
-    state.rearAxlePosition,
-    state.pivotPosition,
-  ];
-  const canvasPoints = statePoints.map(applyPitchRotation).map(toCanvas);
+  const canvasPoints = [
+    state.pivot.wheelsOnGround,
+    state.swingarmEye.wheelsOnGround,
+    state.rearAxle.wheelsOnGround,
+    state.pivot.wheelsOnGround,
+  ].map(toCanvas);
   const polylineString = pointsToPolylineString(canvasPoints);
   return (
     <>
