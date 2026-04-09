@@ -173,8 +173,23 @@ export interface KinematicState {
   crankAngle: number;       // unimplemented, always 0
 }
 
+// Extends KinematicState with geometry-derived positions, computed once per state
+export interface BikeState extends KinematicState {
+  // Frame tube endpoints
+  headTubeTop: KinematicPoint;
+  headTubeBottom: KinematicPoint;
+  seatTop: KinematicPoint;
+  forkBend: KinematicPoint; // end of stanchions (before axle offset)
+
+  // Component positions
+  shockFrameMount: KinematicPoint;
+  chainringCenter: KinematicPoint;
+  idler: KinematicPoint | null;
+  centreOfMass: KinematicPoint;
+}
+
 export interface AnalysisResults {
-  states: KinematicState[];
+  states: BikeState[];
   axlePath: Point2D[];
   frontAxlePath: Point2D[];
 }

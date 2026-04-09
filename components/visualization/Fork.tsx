@@ -1,39 +1,13 @@
-import { getApplyPitchRotation } from "@/lib/kinematics";
-import {
-  BikeGeometry,
-  BoundsConversions,
-  computedProperties,
-  KinematicState,
-} from "@/lib/types";
+import { DrawComponentProps } from "./types";
 
 export const Fork = ({
   state,
-  geometry,
   conversion,
-}: {
-  state: KinematicState;
-  geometry: BikeGeometry;
-  conversion: BoundsConversions;
-}) => {
+}: DrawComponentProps) => {
   const { toCanvasX, toCanvasY } = conversion;
-  const applyPitchRotation = getApplyPitchRotation(
-    state.rearAxle.world,
-    state.pitchAngleDegrees,
-  );
-  const headTubeBottom = computedProperties.headTubeBottom(geometry, state.bb.world);
-  const effectiveForkLength = geometry.forkLength - state.forkCompression;
-  const htaRad = computedProperties.headTubeAngleRadians(geometry);
-  const cosHT = Math.cos(htaRad);
-  const sinHT = Math.sin(htaRad);
-
-  const htBottomRotated = applyPitchRotation(headTubeBottom);
+  const htBottomRotated = state.headTubeBottom.wheelsOnGround;
+  const forkBendRotated = state.forkBend.wheelsOnGround;
   const frontAxleRotated = state.frontAxle.wheelsOnGround;
-
-  // Fork bend point (end of stanchions along steering axis)
-  const forkBendRotated = applyPitchRotation({
-    x: headTubeBottom.x + effectiveForkLength * cosHT,
-    y: headTubeBottom.y - effectiveForkLength * sinHT,
-  });
 
   return (
     <>

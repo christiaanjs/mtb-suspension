@@ -1,5 +1,5 @@
 import { sprocketRadius, tangentPoints } from "@/lib/geometry";
-import { getApplyPitchRotation, getIdlerPosition } from "@/lib/kinematics";
+import { getApplyPitchRotation } from "@/lib/kinematics";
 import { IdlerType, Point2D } from "@/lib/types";
 import { DrawComponentProps } from "./types";
 
@@ -8,24 +8,13 @@ export const Drivetrain = ({
   state,
   conversion,
 }: DrawComponentProps) => {
-  const bbPos = state.bb.world;
   const scale = conversion.scale;
-
   const { toCanvasX, toCanvasY } = conversion;
 
-  const applyPitchRotation = getApplyPitchRotation(
-    state.rearAxle.world,
-    state.pitchAngleDegrees,
-  );
+  const chainringRotated = state.chainringCenter.wheelsOnGround;
+  const cogRotated = state.rearAxle.wheelsOnGround;
+  const idlerRotated = state.idler?.wheelsOnGround ?? null;
 
-  const rearAxlePosRotated = state.rearAxle.wheelsOnGround;
-
-  const chainringPos = {
-    x: bbPos.x + geometry.chainringOffsetX,
-    y: bbPos.y + geometry.chainringOffsetY,
-  };
-  const chainringRotated = applyPitchRotation(chainringPos);
-  const cogRotated = rearAxlePosRotated;
   const chainringRadius = sprocketRadius(geometry.chainringTeeth);
   const cogRadius = sprocketRadius(geometry.cogTeeth);
 
@@ -33,42 +22,26 @@ export const Drivetrain = ({
   const cogRadiusScreen = cogRadius * scale;
 
   const chainSegments: { start: Point2D; end: Point2D }[] = [];
-
-  let idlerRotated: Point2D | null = null;
   let idlerRadiusScreen = 0;
 
   if (geometry.idlerType === IdlerType.None) {
-    // Chainring to cog
-    const tangents = tangentPoints(
-      chainringRotated,
-      chainringRadius,
-      cogRotated,
-      cogRadius,
-    );
-    chainSegments.push(tangents);
-  } else {
-    const idlerPos = getIdlerPosition(state, geometry)!;
-    idlerRotated = applyPitchRotation(idlerPos);
-
+    chainSegments.push(tangentPoints(chainringRotated, chainringRadius, cogRotated, cogRadius));
+  } else if (idlerRotated) {
     const idlerRadius = sprocketRadius(geometry.idlerTeeth);
     idlerRadiusScreen = idlerRadius * scale;
-
-    const cogToIdler = tangentPoints(
-      idlerRotated,
-      idlerRadius,
-      cogRotated,
-      cogRadius,
-    );
-    chainSegments.push(cogToIdler);
-
-    const chainringToIdler = tangentPoints(
-      chainringRotated,
-      chainringRadius,
-      idlerRotated,
-      idlerRadius,
-    );
-    chainSegments.push(chainringToIdler);
+    chainSegments.push(tangentPoints(idlerRotated, idlerRadius, cogRotated, cogRadius));
+    chainSegments.push(tangentPoints(chainringRotated, chainringRadius, idlerRotated, idlerRadius));
   }
+
+  // Crank arm: crankAngle is currently always 0 but kept for when kickback is implemented
+  const crankLength = 165.0;
+  const crankAngleRad = state.crankAngle * (Math.PI / 180);
+  const crankEndWorld = {
+    x: state.chainringCenter.world.x + crankLength * Math.cos(crankAngleRad),
+    y: state.chainringCenter.world.y - crankLength * Math.sin(crankAngleRad),
+  };
+  const applyPitchRotation = getApplyPitchRotation(state.rearAxle.world, state.pitchAngleDegrees);
+  const crankEndRotated = applyPitchRotation(crankEndWorld);
 
   return (
     <>
@@ -114,38 +87,22 @@ export const Drivetrain = ({
           key={index}
         />
       ))}
-
-      {/* Crank arm and pedal */}
-      {(() => {
-        const crankLength = 165.0; // 165mm standard crank
-        const crankAngleRad = state.crankAngle * (Math.PI / 180);
-        const crankEndWorld = {
-          x: chainringPos.x + crankLength * Math.cos(crankAngleRad),
-          y: chainringPos.y - crankLength * Math.sin(crankAngleRad),
-        };
-        const crankEndRotated = applyPitchRotation(crankEndWorld);
-        return (
-          <>
-            {/* Crank arm */}
-            <line
-              x1={toCanvasX(chainringRotated.x)}
-              y1={toCanvasY(chainringRotated.y)}
-              x2={toCanvasX(crankEndRotated.x)}
-              y2={toCanvasY(crankEndRotated.y)}
-              stroke="#6b7280"
-              strokeWidth="2.67"
-            />
-
-            {/* Pedal */}
-            <circle
-              cx={toCanvasX(crankEndRotated.x)}
-              cy={toCanvasY(crankEndRotated.y)}
-              r={5}
-              fill="#f5f5f5"
-            />
-          </>
-        );
-      })()}
+      {/* Crank arm */}
+      <line
+        x1={toCanvasX(chainringRotated.x)}
+        y1={toCanvasY(chainringRotated.y)}
+        x2={toCanvasX(crankEndRotated.x)}
+        y2={toCanvasY(crankEndRotated.y)}
+        stroke="#6b7280"
+        strokeWidth="2.67"
+      />
+      {/* Pedal */}
+      <circle
+        cx={toCanvasX(crankEndRotated.x)}
+        cy={toCanvasY(crankEndRotated.y)}
+        r={5}
+        fill="#f5f5f5"
+      />
     </>
   );
 };

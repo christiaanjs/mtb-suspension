@@ -3,6 +3,7 @@ import {
   BikeGeometry,
   KinematicState,
   KinematicPoint,
+  BikeState,
   AnalysisResults,
   Point2D,
   computedProperties,
@@ -19,6 +20,7 @@ import {
   tangentPoints,
   lineIntersection,
   lineIntersectionWithVertical,
+  degreesToRadians,
 } from "./geometry";
 
 interface RigidTriangle {
@@ -56,8 +58,8 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
     firstPassStates.push({ ...state, proportionalForkStroke });
   }
 
-  // Second pass: build full KinematicState with no dummy initialisation
-  const states: KinematicState[] = [];
+  // Second pass: build full BikeState with no dummy initialisation
+  const states: BikeState[] = [];
   const axlePath: Point2D[] = [];
   const frontAxlePath: Point2D[] = [];
 
@@ -123,7 +125,40 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
     const antiRise = calculateVisualAntiRise(fp, frontAxlePos, geometry, applyPitchRotation);
     const trail = computeTrail(fp, frontAxlePos, geometry, applyPitchRotation);
 
-    const state: KinematicState = {
+    // Geometry-derived positions
+    const headTubeTopWorld = computedProperties.headTubeTop(geometry, fp.bbPosition);
+    const headTubeBottomWorld = computedProperties.headTubeBottom(geometry, fp.bbPosition);
+    const seatAngleRad = degreesToRadians(geometry.seatAngle);
+    const seatTopWorld: Point2D = {
+      x: fp.bbPosition.x - geometry.seatTubeLength * Math.cos(seatAngleRad),
+      y: fp.bbPosition.y + geometry.seatTubeLength * Math.sin(seatAngleRad),
+    };
+    const cosHT = Math.cos(htaRad);
+    const sinHT = Math.sin(htaRad);
+    const forkBendWorld: Point2D = {
+      x: headTubeBottomWorld.x + effectiveForkLength * cosHT,
+      y: headTubeBottomWorld.y - effectiveForkLength * sinHT,
+    };
+    const shockFrameMountWorld: Point2D = {
+      x: fp.bbPosition.x + geometry.shockFrameMountX,
+      y: fp.bbPosition.y + geometry.shockFrameMountY,
+    };
+    const chainringCenterWorld: Point2D = {
+      x: fp.bbPosition.x + geometry.chainringOffsetX,
+      y: fp.bbPosition.y + geometry.chainringOffsetY,
+    };
+    const idlerWorld = idlerPositionFromWorld(
+      fp.bbPosition,
+      fp.pivotPosition,
+      fp.rearAxlePosition,
+      geometry,
+    );
+    const centreOfMassWorld: Point2D = {
+      x: fp.bbPosition.x + geometry.comX,
+      y: fp.bbPosition.y + geometry.comY,
+    };
+
+    const state: BikeState = {
       travelMM: fp.travelMM,
       shockLength: fp.shockLength,
       pitchAngleDegrees,
@@ -142,6 +177,14 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
       totalChainGrowth: 0,
       trail,
       crankAngle: 0,
+      headTubeTop: toKP(headTubeTopWorld),
+      headTubeBottom: toKP(headTubeBottomWorld),
+      seatTop: toKP(seatTopWorld),
+      forkBend: toKP(forkBendWorld),
+      shockFrameMount: toKP(shockFrameMountWorld),
+      chainringCenter: toKP(chainringCenterWorld),
+      idler: idlerWorld ? toKP(idlerWorld) : null,
+      centreOfMass: toKP(centreOfMassWorld),
     };
 
     states.push(state);
