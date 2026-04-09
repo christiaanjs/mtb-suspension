@@ -122,6 +122,24 @@ Tests cover `lib/geometry.ts` and `lib/kinematics.ts` only. Component tests do n
 
 When adding or modifying geometry/kinematics logic, update the corresponding test file.
 
+## CI
+
+Three GitHub Actions workflows run on every pull request:
+
+| Workflow | File | Command |
+|---|---|---|
+| Lint | `.github/workflows/lint.yml` | `npm run lint` |
+| TypeScript | `.github/workflows/typecheck.yml` | `npx tsc --noEmit` |
+| Test | `.github/workflows/test.yml` | `npm test -- --run` |
+
+All three must pass before merging. Run them locally before pushing:
+
+```bash
+npm run lint          # Must pass lint workflow
+npx tsc --noEmit      # Must pass typecheck workflow
+npm test -- --run     # Must pass test workflow
+```
+
 ## License
 
 AGPL-3.0 — modifications must be shared under the same license.

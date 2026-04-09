@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { runKinematicAnalysis } from "./kinematics";
-import { createDefaultGeometry } from "./types";
+import {
+  runKinematicAnalysis,
+  getIdlerPosition,
+  getApplyPitchRotation,
+  getRotatedCentreOfMass,
+} from "./kinematics";
+import { createDefaultGeometry, IdlerType } from "./types";
+import type { KinematicState } from "./types";
 import { distance } from "./geometry";
 
 describe("Rigid Triangle Constraint", () => {
@@ -187,6 +193,187 @@ describe("Rigid Triangle Constraint", () => {
     // Determine whether we need this large tolerance because of numerical error or if there is an issue
     const TOLERANCE = 0.2; // degrees
     expect(Math.abs(topOutState.pitchAngleDegrees)).toBeLessThan(TOLERANCE);
+  });
+});
+
+describe("Leverage Ratio and Wheel Rate", () => {
+  it("leverage ratio should be positive throughout travel", () => {
+    const results = runKinematicAnalysis(createDefaultGeometry());
+    for (const state of results.states) {
+      expect(state.leverageRatio).toBeGreaterThan(0);
+    }
+  });
+
+  it("leverage ratio should be in a physically plausible range", () => {
+    const results = runKinematicAnalysis(createDefaultGeometry());
+    for (const state of results.states) {
+      expect(state.leverageRatio).toBeGreaterThan(1);
+      expect(state.leverageRatio).toBeLessThan(10);
+    }
+  });
+
+  it("wheel rate satisfies springRate / leverageRatio^2", () => {
+    const geometry = createDefaultGeometry();
+    const results = runKinematicAnalysis(geometry);
+    for (const state of results.states) {
+      const expected =
+        geometry.shockSpringRate / (state.leverageRatio * state.leverageRatio);
+      expect(state.wheelRate).toBeCloseTo(expected, 5);
+    }
+  });
+
+  it("wheel rate should be positive throughout travel", () => {
+    const results = runKinematicAnalysis(createDefaultGeometry());
+    for (const state of results.states) {
+      expect(state.wheelRate).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("Anti-Squat and Anti-Rise", () => {
+  it("anti-squat should be positive for default geometry", () => {
+    const results = runKinematicAnalysis(createDefaultGeometry());
+    for (const state of results.states) {
+      expect(state.antiSquat).toBeGreaterThan(0);
+    }
+  });
+
+  it("anti-squat should be in a physically plausible range (0-200%)", () => {
+    const results = runKinematicAnalysis(createDefaultGeometry());
+    for (const state of results.states) {
+      expect(state.antiSquat).toBeGreaterThan(0);
+      expect(state.antiSquat).toBeLessThan(200);
+    }
+  });
+
+  it("anti-rise should be positive for default geometry", () => {
+    const results = runKinematicAnalysis(createDefaultGeometry());
+    for (const state of results.states) {
+      expect(state.antiRise).toBeGreaterThan(0);
+    }
+  });
+
+  it("anti-rise should be in a physically plausible range (0-200%)", () => {
+    const results = runKinematicAnalysis(createDefaultGeometry());
+    for (const state of results.states) {
+      expect(state.antiRise).toBeGreaterThan(0);
+      expect(state.antiRise).toBeLessThan(200);
+    }
+  });
+});
+
+describe("Trail", () => {
+  it("trail should be positive for default geometry", () => {
+    const results = runKinematicAnalysis(createDefaultGeometry());
+    for (const state of results.states) {
+      expect(state.trail).toBeGreaterThan(0);
+    }
+  });
+
+  it("trail should be in a physically plausible range (mm)", () => {
+    const results = runKinematicAnalysis(createDefaultGeometry());
+    for (const state of results.states) {
+      expect(state.trail).toBeGreaterThan(50);
+      expect(state.trail).toBeLessThan(300);
+    }
+  });
+
+  it("trail changes monotonically across travel", () => {
+    const results = runKinematicAnalysis(createDefaultGeometry());
+    const trails = results.states.map((s) => s.trail);
+    // Trail should change consistently in one direction throughout travel
+    const allIncreasing = trails.every((t, i) => i === 0 || t >= trails[i - 1]);
+    const allDecreasing = trails.every((t, i) => i === 0 || t <= trails[i - 1]);
+    expect(allIncreasing || allDecreasing).toBe(true);
+  });
+});
+
+describe("getIdlerPosition", () => {
+  const baseState = runKinematicAnalysis(createDefaultGeometry()).states[0];
+
+  it("returns null when idler type is None", () => {
+    const geometry = createDefaultGeometry();
+    expect(getIdlerPosition(baseState, geometry)).toBeNull();
+  });
+
+  it("returns BB-relative position for frame-mounted idler", () => {
+    const geometry = createDefaultGeometry({
+      overrides: { idlerType: IdlerType.FrameMounted, idlerX: -60, idlerY: 160 },
+    });
+    const result = getIdlerPosition(baseState, geometry);
+    expect(result).not.toBeNull();
+    expect(result?.x).toBeCloseTo(baseState.bbPosition.x + (-60));
+    expect(result?.y).toBeCloseTo(baseState.bbPosition.y + 160);
+  });
+
+  it("returns a point for swingarm-mounted idler", () => {
+    const geometry = createDefaultGeometry({
+      overrides: { idlerType: IdlerType.SwingarmMounted },
+    });
+    const result = getIdlerPosition(baseState, geometry);
+    expect(result).not.toBeNull();
+    expect(typeof result?.x).toBe("number");
+    expect(typeof result?.y).toBe("number");
+  });
+});
+
+describe("getApplyPitchRotation", () => {
+  it("zero pitch angle is an identity transform", () => {
+    const rearAxle = { x: 100, y: 375 };
+    const applyPitch = getApplyPitchRotation(rearAxle, 0);
+    const point = { x: 200, y: 500 };
+    const result = applyPitch(point);
+    expect(result.x).toBeCloseTo(point.x);
+    expect(result.y).toBeCloseTo(point.y);
+  });
+
+  it("pivot point is unchanged by rotation", () => {
+    const rearAxle = { x: 100, y: 375 };
+    const applyPitch = getApplyPitchRotation(rearAxle, 10);
+    const result = applyPitch(rearAxle);
+    expect(result.x).toBeCloseTo(rearAxle.x);
+    expect(result.y).toBeCloseTo(rearAxle.y);
+  });
+
+  it("preserves distance from pivot after rotation", () => {
+    const rearAxle = { x: 0, y: 0 };
+    const point = { x: 100, y: 0 };
+    const applyPitch = getApplyPitchRotation(rearAxle, 15);
+    const result = applyPitch(point);
+    const distBefore = Math.hypot(point.x - rearAxle.x, point.y - rearAxle.y);
+    const distAfter = Math.hypot(result.x - rearAxle.x, result.y - rearAxle.y);
+    expect(distAfter).toBeCloseTo(distBefore);
+  });
+});
+
+describe("getRotatedCentreOfMass", () => {
+  it("returns a point offset from BB by comX/comY then pitch-rotated", () => {
+    const results = runKinematicAnalysis(createDefaultGeometry());
+    const state = results.states[0];
+    const geometry = createDefaultGeometry();
+    const applyPitch = getApplyPitchRotation(
+      state.rearAxlePosition,
+      state.pitchAngleDegrees,
+    );
+    const com = getRotatedCentreOfMass(state, geometry, applyPitch);
+    expect(typeof com.x).toBe("number");
+    expect(typeof com.y).toBe("number");
+    // CoM should be above the ground
+    expect(com.y).toBeGreaterThan(0);
+  });
+
+  it("CoM height is close to BB + comY offset at near-zero pitch", () => {
+    const geometry = createDefaultGeometry();
+    const results = runKinematicAnalysis(geometry);
+    const state = results.states[0]; // top-out: pitch ≈ 0
+    const applyPitch = getApplyPitchRotation(
+      state.rearAxlePosition,
+      state.pitchAngleDegrees,
+    );
+    const com = getRotatedCentreOfMass(state, geometry, applyPitch);
+    // At near-zero pitch the rotated CoM y is approximately bbPosition.y + comY
+    // Allow a few mm tolerance for the small but non-zero pitch angle
+    expect(com.y).toBeCloseTo(state.bbPosition.y + geometry.comY, -1);
   });
 });
 
