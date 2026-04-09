@@ -1,15 +1,236 @@
 import { describe, it, expect } from "vitest";
 import {
+  degreesToRadians,
+  radiansToDegrees,
+  dot,
+  cross,
+  magnitude,
+  normalise,
+  angleBetween,
   distance,
   angle,
   lineIntersection,
+  lineIntersectionWithVertical,
   rotate,
+  transformPointByReferenceLine,
   calculateChainLength,
   sprocketRadius,
   circleCircleIntersection,
   tangentPoints,
 } from "./geometry";
 import { Point2D } from "./types";
+
+describe("degreesToRadians", () => {
+  it("converts 0 degrees to 0", () => {
+    expect(degreesToRadians(0)).toBe(0);
+  });
+
+  it("converts 180 degrees to PI", () => {
+    expect(degreesToRadians(180)).toBeCloseTo(Math.PI);
+  });
+
+  it("converts 90 degrees to PI/2", () => {
+    expect(degreesToRadians(90)).toBeCloseTo(Math.PI / 2);
+  });
+
+  it("converts negative degrees", () => {
+    expect(degreesToRadians(-90)).toBeCloseTo(-Math.PI / 2);
+  });
+});
+
+describe("radiansToDegrees", () => {
+  it("converts 0 to 0 degrees", () => {
+    expect(radiansToDegrees(0)).toBe(0);
+  });
+
+  it("converts PI to 180 degrees", () => {
+    expect(radiansToDegrees(Math.PI)).toBeCloseTo(180);
+  });
+
+  it("converts PI/2 to 90 degrees", () => {
+    expect(radiansToDegrees(Math.PI / 2)).toBeCloseTo(90);
+  });
+
+  it("is the inverse of degreesToRadians", () => {
+    expect(radiansToDegrees(degreesToRadians(45))).toBeCloseTo(45);
+  });
+});
+
+describe("dot", () => {
+  it("dot product of orthogonal vectors is 0", () => {
+    expect(dot({ x: 1, y: 0 }, { x: 0, y: 1 })).toBe(0);
+  });
+
+  it("dot product of aligned vectors equals product of magnitudes", () => {
+    expect(dot({ x: 3, y: 0 }, { x: 5, y: 0 })).toBe(15);
+  });
+
+  it("dot product of opposite vectors is negative", () => {
+    expect(dot({ x: 1, y: 0 }, { x: -1, y: 0 })).toBe(-1);
+  });
+
+  it("computes general dot product", () => {
+    expect(dot({ x: 2, y: 3 }, { x: 4, y: 5 })).toBe(23);
+  });
+});
+
+describe("cross", () => {
+  it("cross product of parallel vectors is 0", () => {
+    expect(cross({ x: 1, y: 0 }, { x: 2, y: 0 })).toBe(0);
+  });
+
+  it("cross product of x-hat and y-hat is 1", () => {
+    expect(cross({ x: 1, y: 0 }, { x: 0, y: 1 })).toBe(1);
+  });
+
+  it("cross product of y-hat and x-hat is -1 (anti-commutative)", () => {
+    expect(cross({ x: 0, y: 1 }, { x: 1, y: 0 })).toBe(-1);
+  });
+
+  it("computes general cross product", () => {
+    expect(cross({ x: 2, y: 3 }, { x: 4, y: 5 })).toBe(-2);
+  });
+});
+
+describe("magnitude", () => {
+  it("magnitude of unit vector is 1", () => {
+    expect(magnitude({ x: 1, y: 0 })).toBe(1);
+  });
+
+  it("magnitude of 3-4-5 vector is 5", () => {
+    expect(magnitude({ x: 3, y: 4 })).toBe(5);
+  });
+
+  it("magnitude of zero vector is 0", () => {
+    expect(magnitude({ x: 0, y: 0 })).toBe(0);
+  });
+
+  it("magnitude with negative components", () => {
+    expect(magnitude({ x: -3, y: -4 })).toBe(5);
+  });
+});
+
+describe("normalise", () => {
+  it("normalised vector has magnitude 1", () => {
+    const result = normalise({ x: 3, y: 4 });
+    expect(magnitude(result)).toBeCloseTo(1);
+  });
+
+  it("normalises along x-axis", () => {
+    const result = normalise({ x: 5, y: 0 });
+    expect(result.x).toBeCloseTo(1);
+    expect(result.y).toBeCloseTo(0);
+  });
+
+  it("normalises along y-axis", () => {
+    const result = normalise({ x: 0, y: 7 });
+    expect(result.x).toBeCloseTo(0);
+    expect(result.y).toBeCloseTo(1);
+  });
+});
+
+describe("angleBetween", () => {
+  it("angle between same-direction vectors is 0", () => {
+    expect(angleBetween({ x: 1, y: 0 }, { x: 2, y: 0 })).toBeCloseTo(0);
+  });
+
+  it("angle between perpendicular vectors is PI/2", () => {
+    expect(angleBetween({ x: 1, y: 0 }, { x: 0, y: 1 })).toBeCloseTo(
+      Math.PI / 2,
+    );
+  });
+
+  it("angle between opposite vectors is PI", () => {
+    expect(angleBetween({ x: 1, y: 0 }, { x: -1, y: 0 })).toBeCloseTo(
+      Math.PI,
+    );
+  });
+
+  it("throws for zero-length first vector", () => {
+    expect(() => angleBetween({ x: 0, y: 0 }, { x: 1, y: 0 })).toThrow();
+  });
+
+  it("throws for zero-length second vector", () => {
+    expect(() => angleBetween({ x: 1, y: 0 }, { x: 0, y: 0 })).toThrow();
+  });
+});
+
+describe("lineIntersectionWithVertical", () => {
+  it("finds intersection of diagonal line with vertical", () => {
+    const result = lineIntersectionWithVertical(
+      { x: 0, y: 0 },
+      { x: 10, y: 10 },
+      5,
+    );
+    expect(result).not.toBeNull();
+    expect(result?.x).toBeCloseTo(5);
+    expect(result?.y).toBeCloseTo(5);
+  });
+
+  it("returns null when input line is vertical", () => {
+    const result = lineIntersectionWithVertical(
+      { x: 3, y: 0 },
+      { x: 3, y: 10 },
+      5,
+    );
+    expect(result).toBeNull();
+  });
+
+  it("finds intersection of horizontal line with vertical", () => {
+    const result = lineIntersectionWithVertical(
+      { x: 0, y: 4 },
+      { x: 10, y: 4 },
+      7,
+    );
+    expect(result).not.toBeNull();
+    expect(result?.x).toBeCloseTo(7);
+    expect(result?.y).toBeCloseTo(4);
+  });
+
+  it("extrapolates beyond the segment endpoints", () => {
+    const result = lineIntersectionWithVertical(
+      { x: 0, y: 0 },
+      { x: 5, y: 5 },
+      10,
+    );
+    expect(result).not.toBeNull();
+    expect(result?.x).toBeCloseTo(10);
+    expect(result?.y).toBeCloseTo(10);
+  });
+});
+
+describe("transformPointByReferenceLine", () => {
+  it("identity transform leaves point unchanged", () => {
+    const P = { x: 0, y: 0 };
+    const A = { x: 1, y: 0 };
+    const I = { x: 0.5, y: 1 };
+    const result = transformPointByReferenceLine(P, A, I, P, A);
+    expect(result.x).toBeCloseTo(I.x);
+    expect(result.y).toBeCloseTo(I.y);
+  });
+
+  it("translates point when reference line shifts with same orientation", () => {
+    const P0 = { x: 0, y: 0 };
+    const A0 = { x: 1, y: 0 };
+    const I0 = { x: 0, y: 1 };
+    const P1 = { x: 5, y: 0 };
+    const A1 = { x: 6, y: 0 };
+    const result = transformPointByReferenceLine(P0, A0, I0, P1, A1);
+    expect(result.x).toBeCloseTo(5);
+    expect(result.y).toBeCloseTo(1);
+  });
+
+  it("rotates point when reference line rotates 90 degrees", () => {
+    const P = { x: 0, y: 0 };
+    const A0 = { x: 1, y: 0 }; // pointing right
+    const I0 = { x: 0, y: 1 }; // point above P
+    const A1 = { x: 0, y: 1 }; // now pointing up
+    const result = transformPointByReferenceLine(P, A0, I0, P, A1);
+    // I0 was 90° CCW from A0 direction; should now be 90° CCW from A1 direction = pointing left
+    expect(result.x).toBeCloseTo(-1);
+    expect(result.y).toBeCloseTo(0);
+  });
+});
 
 describe("distance", () => {
   it("should calculate distance between two points", () => {
