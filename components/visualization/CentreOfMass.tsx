@@ -9,12 +9,12 @@ export const CentreOfMass = ({
 }: DrawComponentProps) => {
   const { toCanvas } = conversion;
   const applyPitchRotation = getApplyPitchRotation(
-    state.rearAxlePosition,
+    state.rearAxle.world,
     state.pitchAngleDegrees,
   );
-  // TODO: Do we need to add CoM before or after pitch rotation>
+  // CoM is defined relative to BB in world space, then pitch-rotated
   const comRotated = applyPitchRotation(
-    Point2D.add(state.bbPosition, {
+    Point2D.add(state.bb.world, {
       x: geometry.comX,
       y: geometry.comY,
     }),

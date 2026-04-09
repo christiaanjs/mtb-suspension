@@ -8,7 +8,7 @@ export const FrontTriangle = ({
   geometry,
   conversion,
 }: DrawComponentProps) => {
-  const bbPos = state.bbPosition;
+  const bbPos = state.bb.world;
   const { toCanvasX, toCanvasY } = conversion;
   const seatAngleRad = degreesToRadians(geometry.seatAngle);
   const seatTopWorldX =
@@ -16,7 +16,7 @@ export const FrontTriangle = ({
   const seatTopWorldY =
     bbPos.y + geometry.seatTubeLength * Math.sin(seatAngleRad);
   const applyPitchRotation = getApplyPitchRotation(
-    state.rearAxlePosition,
+    state.rearAxle.world,
     state.pitchAngleDegrees,
   );
   const seatTopRotated = applyPitchRotation({
@@ -25,21 +25,15 @@ export const FrontTriangle = ({
   });
 
   // Downtube junction (20mm above head tube bottom in world coords)
-  const headTubeBottom = computedProperties.headTubeBottom(
-    geometry,
-    state.bbPosition,
-  );
-  const headTubeTop = computedProperties.headTubeTop(
-    geometry,
-    state.bbPosition,
-  );
+  const headTubeBottom = computedProperties.headTubeBottom(geometry, bbPos);
+  const headTubeTop = computedProperties.headTubeTop(geometry, bbPos);
   const downtubeJunctionY = headTubeBottom.y + 20;
   const downtubeJunctionWorldX = headTubeBottom.x;
   const downtubeJunctionRotated = applyPitchRotation({
     x: downtubeJunctionWorldX,
     y: downtubeJunctionY,
   });
-  const bbPosRotated = applyPitchRotation(bbPos);
+  const bbPosRotated = state.bb.wheelsOnGround;
 
   const htTopRotated = applyPitchRotation(headTubeTop);
   const htBottomRotated = applyPitchRotation(headTubeBottom);

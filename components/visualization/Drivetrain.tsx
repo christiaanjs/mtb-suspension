@@ -8,17 +8,17 @@ export const Drivetrain = ({
   state,
   conversion,
 }: DrawComponentProps) => {
-  const bbPos = state.bbPosition;
+  const bbPos = state.bb.world;
   const scale = conversion.scale;
 
   const { toCanvasX, toCanvasY } = conversion;
 
   const applyPitchRotation = getApplyPitchRotation(
-    state.rearAxlePosition,
+    state.rearAxle.world,
     state.pitchAngleDegrees,
   );
 
-  const rearAxlePosRotated = applyPitchRotation(state.rearAxlePosition);
+  const rearAxlePosRotated = state.rearAxle.wheelsOnGround;
 
   const chainringPos = {
     x: bbPos.x + geometry.chainringOffsetX,

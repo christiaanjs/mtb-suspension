@@ -4,15 +4,15 @@ import { DrawComponentProps } from "./types";
 export const Shock = ({ conversion, state, geometry }: DrawComponentProps) => {
   const { toCanvasX, toCanvasY } = conversion;
   const applyPitchRotation = getApplyPitchRotation(
-    state.rearAxlePosition,
+    state.rearAxle.world,
     state.pitchAngleDegrees,
   );
   const frameMountRotated = applyPitchRotation({
-    x: state.bbPosition.x + geometry.shockFrameMountX,
-    y: state.bbPosition.y + geometry.shockFrameMountY,
+    x: state.bb.world.x + geometry.shockFrameMountX,
+    y: state.bb.world.y + geometry.shockFrameMountY,
   });
 
-  const shockEyePosRotated = applyPitchRotation(state.swingarmEyePosition);
+  const shockEyePosRotated = state.swingarmEye.wheelsOnGround;
 
   return (
     <>

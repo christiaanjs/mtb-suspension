@@ -17,37 +17,22 @@ export const Fork = ({
 }) => {
   const { toCanvasX, toCanvasY } = conversion;
   const applyPitchRotation = getApplyPitchRotation(
-    state.rearAxlePosition,
+    state.rearAxle.world,
     state.pitchAngleDegrees,
   );
-  const headTubeBottom = computedProperties.headTubeBottom(
-    geometry,
-    state.bbPosition,
-  );
+  const headTubeBottom = computedProperties.headTubeBottom(geometry, state.bb.world);
   const effectiveForkLength = geometry.forkLength - state.forkCompression;
   const htaRad = computedProperties.headTubeAngleRadians(geometry);
   const cosHT = Math.cos(htaRad);
   const sinHT = Math.sin(htaRad);
-  const frontAxle = {
-    x:
-      headTubeBottom.x +
-      effectiveForkLength * cosHT +
-      geometry.forkOffset * sinHT,
-    y:
-      headTubeBottom.y -
-      effectiveForkLength * sinHT +
-      geometry.forkOffset * cosHT,
-  };
-  const frontAxleRotated = applyPitchRotation(frontAxle);
 
   const htBottomRotated = applyPitchRotation(headTubeBottom);
+  const frontAxleRotated = state.frontAxle.wheelsOnGround;
 
   // Fork bend point (end of stanchions along steering axis)
-  const forkBendWorldX = headTubeBottom.x + effectiveForkLength * cosHT;
-  const forkBendWorldY = headTubeBottom.y - effectiveForkLength * sinHT;
   const forkBendRotated = applyPitchRotation({
-    x: forkBendWorldX,
-    y: forkBendWorldY,
+    x: headTubeBottom.x + effectiveForkLength * cosHT,
+    y: headTubeBottom.y - effectiveForkLength * sinHT,
   });
 
   return (
