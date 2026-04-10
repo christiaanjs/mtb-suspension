@@ -166,7 +166,7 @@ export function AnimationView({
   onCoupledChange,
   ...props
 }: AnimationViewProps) {
-  const axlePath = props.analysisResults.states.map((s) => s.rearAxle.world);
+  const axlePath = props.analysisResults.axlePath;
   // Shock position is kept local — it drives animation independently of fork
   const [shockPercent, setShockPercent] = React.useState(initialTravelPercentage);
 
