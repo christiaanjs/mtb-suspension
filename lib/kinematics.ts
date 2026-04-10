@@ -43,7 +43,19 @@ interface FirstPassState {
   proportionalForkStroke: number;
 }
 
-export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
+/**
+ * Run a full kinematic sweep across the shock stroke range.
+ *
+ * @param fixedForkCompressionMM  When provided, every state in the sweep uses
+ *   this constant fork compression instead of the proportional value derived
+ *   from shock travel.  Pass this when fork and shock are uncoupled so that
+ *   computed metrics (trail, anti-squat, anti-rise, pitch, …) reflect the
+ *   actual fork position being displayed.
+ */
+export function runKinematicAnalysis(
+  geometry: BikeGeometry,
+  fixedForkCompressionMM?: number,
+): AnalysisResults {
   const rigidTriangle = establishRigidTriangle(geometry);
 
   const stepSize = 0.5; // mm - finer steps for smoother graphs
@@ -54,7 +66,10 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
   for (let step = 0; step < strokeSteps; step++) {
     const shockStroke = step * stepSize;
     const travelRatio = shockStroke / geometry.shockStroke;
-    const proportionalForkStroke = travelRatio * geometry.forkTravel;
+    const proportionalForkStroke =
+      fixedForkCompressionMM !== undefined
+        ? fixedForkCompressionMM
+        : travelRatio * geometry.forkTravel;
     const state = calculateStateAtShockStroke(shockStroke, geometry, rigidTriangle);
     firstPassStates.push({ ...state, proportionalForkStroke });
   }
@@ -516,16 +531,23 @@ function getFrontSprocketCircle(
   rearAxlePos: Point2D,
   geometry: BikeGeometry,
 ): Circle {
-  if (geometry.idlerType === IdlerType.None) {
+  if (geometry.idlerType === IdlerType.FrameMounted) {
+    // The chainring→idler segment is frame-fixed and does not apply force to the
+    // swingarm.  The idler acts as the effective "front" of the driving segment
+    // (idler → rear cog) that determines anti-squat.
+    const radius = sprocketRadius(geometry.idlerTeeth);
+    const center = idlerPositionFromWorld(bbPos, pivotPos, rearAxlePos, geometry)!;
+    return { center, radius };
+  } else {
+    // No idler: chainring → rear cog.
+    // Swingarm-mounted idler: the idler→cog segment is internal to the swingarm;
+    // the chainring → idler segment is the one that applies force to the swingarm,
+    // so the chainring is the "front" of the driving segment.
     const center = Point2D.add(bbPos, {
       x: geometry.chainringOffsetX,
       y: geometry.chainringOffsetY,
     });
     return { center, radius: sprocketRadius(geometry.chainringTeeth) };
-  } else {
-    const radius = sprocketRadius(geometry.idlerTeeth);
-    const center = idlerPositionFromWorld(bbPos, pivotPos, rearAxlePos, geometry)!;
-    return { center, radius };
   }
 }
 
@@ -590,6 +612,70 @@ export const getApplyPitchRotation =
       y: rearAxle.y + dx * sinA + dy * cosA,
     };
   };
+
+/**
+ * Re-derives the fork-dependent positions in a BikeState using a new fork
+ * compression value (in mm), recomputing pitch angle and all wheelsOnGround
+ * coordinates accordingly.  Rear-suspension state is left unchanged.
+ */
+export function overrideForkCompression(
+  state: BikeState,
+  forkCompressionMM: number,
+  geometry: BikeGeometry,
+): BikeState {
+  const htaRad = computedProperties.headTubeAngleRadians(geometry);
+  const cosHT = Math.cos(htaRad);
+  const sinHT = Math.sin(htaRad);
+
+  const effectiveForkLength = geometry.forkLength - forkCompressionMM;
+  const headTubeBottomWorld = state.headTubeBottom.world;
+
+  const forkBendWorld: Point2D = {
+    x: headTubeBottomWorld.x + effectiveForkLength * cosHT,
+    y: headTubeBottomWorld.y - effectiveForkLength * sinHT,
+  };
+  const frontAxleWorld: Point2D = {
+    x: headTubeBottomWorld.x + effectiveForkLength * cosHT + geometry.forkOffset * sinHT,
+    y: headTubeBottomWorld.y - effectiveForkLength * sinHT + geometry.forkOffset * cosHT,
+  };
+
+  // Recompute pitch angle from new front axle position
+  const dx = frontAxleWorld.x - state.rearAxle.world.x;
+  const dy = frontAxleWorld.y - state.rearAxle.world.y;
+  const centerDist = Math.sqrt(dx * dx + dy * dy);
+  const centerAngle = Math.atan2(dy, dx);
+  const frontWheelRadius = computedProperties.frontWheelRadius(geometry);
+  const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
+  const radiusDiff = frontWheelRadius - rearWheelRadius;
+  const angleOffset = Math.asin(Math.min(1, Math.max(-1, radiusDiff / centerDist)));
+  const pitchAngleDegrees = ((centerAngle - angleOffset) * 180.0) / Math.PI;
+
+  const applyPitch = getApplyPitchRotation(state.rearAxle.world, pitchAngleDegrees);
+  const toKP = (world: Point2D): KinematicPoint => ({
+    world,
+    wheelsOnGround: applyPitch(world),
+  });
+
+  return {
+    ...state,
+    pitchAngleDegrees,
+    forkCompression: forkCompressionMM,
+    frontAxle: toKP(frontAxleWorld),
+    forkBend: toKP(forkBendWorld),
+    // Re-rotate all other positions with the new pitch
+    rearAxle: toKP(state.rearAxle.world),
+    bb: toKP(state.bb.world),
+    pivot: toKP(state.pivot.world),
+    swingarmEye: toKP(state.swingarmEye.world),
+    headTubeTop: toKP(state.headTubeTop.world),
+    headTubeBottom: toKP(state.headTubeBottom.world),
+    seatTop: toKP(state.seatTop.world),
+    shockFrameMount: toKP(state.shockFrameMount.world),
+    chainringCenter: toKP(state.chainringCenter.world),
+    idler: state.idler ? toKP(state.idler.world) : null,
+    centreOfMass: toKP(state.centreOfMass.world),
+  };
+}
 
 export function getRotatedCentreOfMass(
   state: KinematicState,

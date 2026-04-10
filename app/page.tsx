@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useBikeViewModel } from "@/hooks/useBikeViewModel";
 import { InputPanel } from "@/components/InputPanel";
 import { AnimationView } from "@/components/Visualization";
 import { GraphPanel } from "@/components/Graphs";
 import { Attribution } from "@/components/Attribution";
+import { runKinematicAnalysis } from "@/lib/kinematics";
+import { AnalysisResults } from "@/lib/types";
 
 type MobileTab = "inputs" | "bike" | "analysis";
 
@@ -13,6 +15,32 @@ export default function Home() {
   const viewModel = useBikeViewModel();
   const [isAnimating, setIsAnimating] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>("bike");
+
+  // Fork / shock coupling state (lifted so GraphPanel can receive fork-aware results)
+  const [forkCompressionPercent, setForkCompressionPercent] = useState(0);
+  const [coupled, setCoupled] = useState(true);
+  // Only stores the uncoupled (fixed-fork) analysis; null means "not yet computed".
+  const [forkAwareResults, setForkAwareResults] = useState<AnalysisResults | null>(null);
+
+  // When uncoupled, re-run the analysis with the fixed fork compression so that
+  // all metrics (trail, anti-squat, anti-rise, pitch angle, …) match the animation.
+  useEffect(() => {
+    if (coupled) return;
+    const timer = setTimeout(() => {
+      const fixedForkMM =
+        (forkCompressionPercent / 100) * viewModel.geometry.forkTravel;
+      setForkAwareResults(
+        runKinematicAnalysis(viewModel.geometry, fixedForkMM),
+      );
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [forkCompressionPercent, coupled, viewModel.analysisResults, viewModel.geometry]);
+
+  // When coupled, use the proportional results directly; when uncoupled, use the
+  // fork-aware results (falling back to proportional until the first debounce fires).
+  const graphResults = coupled
+    ? viewModel.analysisResults
+    : (forkAwareResults ?? viewModel.analysisResults);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -151,6 +179,10 @@ export default function Home() {
               animationSpeed={viewModel.animationSpeed}
               selectedGraph={viewModel.selectedGraph}
               showCalculations={true}
+              forkCompressionPercent={forkCompressionPercent}
+              coupled={coupled}
+              onForkCompressionChange={setForkCompressionPercent}
+              onCoupledChange={setCoupled}
             />
           </div>
 
@@ -161,7 +193,7 @@ export default function Home() {
             }`}
           >
             <GraphPanel
-              results={viewModel.analysisResults}
+              results={graphResults}
               selectedGraph={viewModel.selectedGraph}
               onGraphChange={viewModel.setSelectedGraph}
               travelPercentage={travelPercentage}
