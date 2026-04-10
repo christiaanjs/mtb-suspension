@@ -170,7 +170,7 @@ export interface KinematicState {
   chainGrowth: number;      // mm, cumulative chain path growth from top-out (single strand)
   totalChainGrowth: number; // mm, same as chainGrowth
   trail: number;
-  crankAngle: number;       // degrees, equals pedalKickback; used for crank arm visualization
+  crankAngle: number;       // degrees, negated pedalKickback; CCW on screen (left-side view) = backward rotation
 }
 
 // Extends KinematicState with geometry-derived positions, computed once per state

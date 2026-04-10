@@ -176,7 +176,7 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
     const chainGrowth = (currentChainLength - referenceChainLength) / 2;
     const totalChainGrowth = chainGrowth;
     const pedalKickback = (chainGrowth / chainringRadius) * (180 / Math.PI);
-    const crankAngle = pedalKickback;
+    const crankAngle = -pedalKickback;
 
     const state: BikeState = {
       travelMM: fp.travelMM,

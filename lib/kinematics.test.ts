@@ -370,9 +370,9 @@ describe("Pedal Kickback and Chain Growth", () => {
       }
     });
 
-    it("crankAngle equals pedalKickback at every state", () => {
+    it("crankAngle is the negation of pedalKickback at every state", () => {
       for (const state of results.states) {
-        expect(state.crankAngle).toBeCloseTo(state.pedalKickback, 5);
+        expect(state.crankAngle).toBeCloseTo(-state.pedalKickback, 5);
       }
     });
 
