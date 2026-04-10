@@ -166,11 +166,11 @@ export interface KinematicState {
   wheelRate: number;
   antiSquat: number;
   antiRise: number;
-  pedalKickback: number;    // unimplemented, always 0
-  chainGrowth: number;      // unimplemented, always 0
-  totalChainGrowth: number; // unimplemented, always 0
+  pedalKickback: number;    // degrees, cumulative backward crank rotation from top-out
+  chainGrowth: number;      // mm, cumulative chain path growth from top-out (single strand)
+  totalChainGrowth: number; // mm, same as chainGrowth
   trail: number;
-  crankAngle: number;       // unimplemented, always 0
+  crankAngle: number;       // degrees, equals pedalKickback; used for crank arm visualization
 }
 
 // Extends KinematicState with geometry-derived positions, computed once per state

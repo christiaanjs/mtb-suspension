@@ -6,7 +6,7 @@ import {
   getRotatedCentreOfMass,
 } from "./kinematics";
 import { createDefaultGeometry, IdlerType } from "./types";
-import { distance } from "./geometry";
+import { distance, sprocketRadius } from "./geometry";
 
 describe("Rigid Triangle Constraint", () => {
   it("swingarm triangle should maintain fixed side lengths throughout travel", () => {
@@ -342,6 +342,119 @@ describe("getApplyPitchRotation", () => {
     const distBefore = Math.hypot(point.x - rearAxle.x, point.y - rearAxle.y);
     const distAfter = Math.hypot(result.x - rearAxle.x, result.y - rearAxle.y);
     expect(distAfter).toBeCloseTo(distBefore);
+  });
+});
+
+describe("Pedal Kickback and Chain Growth", () => {
+  describe("No idler (default geometry)", () => {
+    const geometry = createDefaultGeometry();
+    const results = runKinematicAnalysis(geometry);
+
+    it("chainGrowth is 0 at top-out", () => {
+      expect(results.states[0].chainGrowth).toBeCloseTo(0, 5);
+    });
+
+    it("pedalKickback is 0 at top-out", () => {
+      expect(results.states[0].pedalKickback).toBeCloseTo(0, 5);
+    });
+
+    it("crankAngle is 0 at top-out", () => {
+      expect(results.states[0].crankAngle).toBeCloseTo(0, 5);
+    });
+
+    it("pedalKickback equals chainGrowth / chainringRadius * (180/PI) at every state", () => {
+      const cr = sprocketRadius(geometry.chainringTeeth);
+      for (const state of results.states) {
+        const expected = (state.chainGrowth / cr) * (180 / Math.PI);
+        expect(state.pedalKickback).toBeCloseTo(expected, 5);
+      }
+    });
+
+    it("crankAngle equals pedalKickback at every state", () => {
+      for (const state of results.states) {
+        expect(state.crankAngle).toBeCloseTo(state.pedalKickback, 5);
+      }
+    });
+
+    it("totalChainGrowth equals chainGrowth at every state", () => {
+      for (const state of results.states) {
+        expect(state.totalChainGrowth).toBeCloseTo(state.chainGrowth, 5);
+      }
+    });
+
+    it("chainGrowth is finite throughout travel", () => {
+      for (const state of results.states) {
+        expect(isFinite(state.chainGrowth)).toBe(true);
+        expect(isNaN(state.chainGrowth)).toBe(false);
+      }
+    });
+
+    it("pedalKickback is in a physically plausible range", () => {
+      for (const state of results.states) {
+        expect(state.pedalKickback).toBeGreaterThan(-5);
+        expect(state.pedalKickback).toBeLessThan(90);
+      }
+    });
+  });
+
+  describe("Frame-mounted idler", () => {
+    const geometry = createDefaultGeometry({
+      overrides: { idlerType: IdlerType.FrameMounted, idlerX: -60, idlerY: 160, idlerTeeth: 16 },
+    });
+    const results = runKinematicAnalysis(geometry);
+
+    it("chainGrowth is 0 at top-out", () => {
+      expect(results.states[0].chainGrowth).toBeCloseTo(0, 5);
+    });
+
+    it("pedalKickback is 0 at top-out", () => {
+      expect(results.states[0].pedalKickback).toBeCloseTo(0, 5);
+    });
+
+    it("chainGrowth is finite throughout travel", () => {
+      for (const state of results.states) {
+        expect(isFinite(state.chainGrowth)).toBe(true);
+        expect(isNaN(state.chainGrowth)).toBe(false);
+      }
+    });
+
+    it("pedalKickback equals chainGrowth / chainringRadius * (180/PI) at every state", () => {
+      const cr = sprocketRadius(geometry.chainringTeeth);
+      for (const state of results.states) {
+        const expected = (state.chainGrowth / cr) * (180 / Math.PI);
+        expect(state.pedalKickback).toBeCloseTo(expected, 5);
+      }
+    });
+  });
+
+  describe("Swingarm-mounted idler", () => {
+    const geometry = createDefaultGeometry({
+      overrides: { idlerType: IdlerType.SwingarmMounted, idlerX: -60, idlerY: 160, idlerTeeth: 16 },
+    });
+    const results = runKinematicAnalysis(geometry);
+
+    it("chainGrowth is 0 at top-out", () => {
+      expect(results.states[0].chainGrowth).toBeCloseTo(0, 5);
+    });
+
+    it("pedalKickback is 0 at top-out", () => {
+      expect(results.states[0].pedalKickback).toBeCloseTo(0, 5);
+    });
+
+    it("chainGrowth is finite throughout travel", () => {
+      for (const state of results.states) {
+        expect(isFinite(state.chainGrowth)).toBe(true);
+        expect(isNaN(state.chainGrowth)).toBe(false);
+      }
+    });
+
+    it("pedalKickback equals chainGrowth / chainringRadius * (180/PI) at every state", () => {
+      const cr = sprocketRadius(geometry.chainringTeeth);
+      for (const state of results.states) {
+        const expected = (state.chainGrowth / cr) * (180 / Math.PI);
+        expect(state.pedalKickback).toBeCloseTo(expected, 5);
+      }
+    });
   });
 });
 

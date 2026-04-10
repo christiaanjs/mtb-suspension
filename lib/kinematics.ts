@@ -16,6 +16,7 @@ import {
   angle,
   circleCircleIntersection,
   sprocketRadius,
+  calculateChainLength,
   transformPointByReferenceLine,
   tangentPoints,
   lineIntersection,
@@ -62,6 +63,14 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
   const states: BikeState[] = [];
   const axlePath: Point2D[] = [];
   const frontAxlePath: Point2D[] = [];
+
+  const referenceChainLength = calculateDrivetrainChainLength(
+    firstPassStates[0].bbPosition,
+    firstPassStates[0].pivotPosition,
+    firstPassStates[0].rearAxlePosition,
+    geometry,
+  );
+  const chainringRadius = sprocketRadius(geometry.chainringTeeth);
 
   for (let i = 0; i < firstPassStates.length; i++) {
     const fp = firstPassStates[i];
@@ -158,6 +167,17 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
       y: fp.bbPosition.y + geometry.comY,
     };
 
+    const currentChainLength = calculateDrivetrainChainLength(
+      fp.bbPosition,
+      fp.pivotPosition,
+      fp.rearAxlePosition,
+      geometry,
+    );
+    const chainGrowth = (currentChainLength - referenceChainLength) / 2;
+    const totalChainGrowth = chainGrowth;
+    const pedalKickback = (chainGrowth / chainringRadius) * (180 / Math.PI);
+    const crankAngle = pedalKickback;
+
     const state: BikeState = {
       travelMM: fp.travelMM,
       shockLength: fp.shockLength,
@@ -172,11 +192,11 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
       wheelRate,
       antiSquat,
       antiRise,
-      pedalKickback: 0,
-      chainGrowth: 0,
-      totalChainGrowth: 0,
+      pedalKickback,
+      chainGrowth,
+      totalChainGrowth,
       trail,
-      crankAngle: 0,
+      crankAngle,
       headTubeTop: toKP(headTubeTopWorld),
       headTubeBottom: toKP(headTubeBottomWorld),
       seatTop: toKP(seatTopWorld),
@@ -523,6 +543,38 @@ function getRearSprocketCircle(
   } else {
     const center = idlerPositionFromWorld(bbPos, pivotPos, rearAxlePos, geometry)!;
     return { center, radius: sprocketRadius(geometry.idlerTeeth) };
+  }
+}
+
+// Returns the length of the chain segment that changes with suspension travel.
+// For IdlerType.None: chainring-to-cog.
+// For FrameMounted: idler-to-cog (chainring-to-idler is frame-fixed, constant).
+// For SwingarmMounted: chainring-to-idler (idler-to-cog is swingarm-fixed, constant).
+function calculateDrivetrainChainLength(
+  bbPos: Point2D,
+  pivotPos: Point2D,
+  rearAxlePos: Point2D,
+  geometry: BikeGeometry,
+): number {
+  const chainringCenter: Point2D = {
+    x: bbPos.x + geometry.chainringOffsetX,
+    y: bbPos.y + geometry.chainringOffsetY,
+  };
+  const chainringRadius = sprocketRadius(geometry.chainringTeeth);
+  const cogRadius = sprocketRadius(geometry.cogTeeth);
+
+  if (geometry.idlerType === IdlerType.None) {
+    return calculateChainLength(chainringCenter, rearAxlePos, chainringRadius, cogRadius);
+  }
+
+  const idlerPos = idlerPositionFromWorld(bbPos, pivotPos, rearAxlePos, geometry)!;
+  const idlerRadius = sprocketRadius(geometry.idlerTeeth);
+
+  if (geometry.idlerType === IdlerType.FrameMounted) {
+    return calculateChainLength(idlerPos, rearAxlePos, idlerRadius, cogRadius);
+  } else {
+    // SwingarmMounted
+    return calculateChainLength(chainringCenter, idlerPos, chainringRadius, idlerRadius);
   }
 }
 
