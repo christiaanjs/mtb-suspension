@@ -1,11 +1,14 @@
 "use client";
 
+import { useRef, useEffect, useState } from "react";
 import { AnalysisResults, GraphType } from "@/lib/types";
 
 interface GraphProps {
   results: AnalysisResults;
   selectedGraph: string;
   travelPercentage: number;
+  containerWidth?: number;
+  containerHeight?: number;
 }
 
 function getGraphData(
@@ -85,6 +88,8 @@ export function Graph({
   results,
   selectedGraph,
   travelPercentage,
+  containerWidth,
+  containerHeight,
 }: GraphProps) {
   if (results.states.length === 0) {
     return (
@@ -103,10 +108,10 @@ export function Graph({
   const yRange = yMax - yMin || 1;
   const xMax = Math.max(...xData) || 1;
 
-  // Canvas dimensions
-  const width = 800;
-  const height = 300;
-  const padding = 40;
+  // Canvas dimensions — dynamic based on container
+  const width = containerWidth ?? 800;
+  const height = Math.max(180, containerHeight ?? 300);
+  const padding = Math.max(32, Math.min(40, Math.floor(width * 0.05)));
   const plotWidth = width - padding * 2;
   const plotHeight = height - padding * 2;
 
@@ -130,7 +135,7 @@ export function Graph({
           {label} ({unit})
         </h3>
       </div>
-      <div className="flex-1 overflow-auto flex items-center justify-center p-4">
+      <div className="flex-1 flex items-center justify-center p-2 min-h-0">
         <svg
           width={width}
           height={height}
@@ -288,6 +293,25 @@ export function GraphPanel({
   onGraphChange,
   travelPercentage,
 }: GraphPanelProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dims, setDims] = useState({ width: 800, height: 300 });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        setDims({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height,
+        });
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const graphs = [
     { value: GraphType.LeverageRatio, label: "Leverage Ratio" },
     { value: GraphType.AntiSquat, label: "Anti-Squat" },
@@ -316,11 +340,13 @@ export function GraphPanel({
           </button>
         ))}
       </div>
-      <div className="flex-1 overflow-auto">
+      <div ref={containerRef} className="flex-1 min-h-0">
         <Graph
           results={results}
           selectedGraph={selectedGraph}
           travelPercentage={travelPercentage}
+          containerWidth={dims.width}
+          containerHeight={dims.height}
         />
       </div>
     </div>
