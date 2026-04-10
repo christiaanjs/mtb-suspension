@@ -19,28 +19,28 @@ export default function Home() {
   // Fork / shock coupling state (lifted so GraphPanel can receive fork-aware results)
   const [forkCompressionPercent, setForkCompressionPercent] = useState(0);
   const [coupled, setCoupled] = useState(true);
-  const [graphResults, setGraphResults] = useState<AnalysisResults>(
-    viewModel.analysisResults,
-  );
+  // Only stores the uncoupled (fixed-fork) analysis; null means "not yet computed".
+  const [forkAwareResults, setForkAwareResults] = useState<AnalysisResults | null>(null);
 
-  // Recompute graph results whenever fork compression or geometry changes.
-  // When coupled, the proportional analysis already in the viewModel is correct.
-  // When uncoupled, re-run with the fixed fork compression so that all metrics
-  // (trail, anti-squat, anti-rise, pitch angle, …) match what the animation shows.
+  // When uncoupled, re-run the analysis with the fixed fork compression so that
+  // all metrics (trail, anti-squat, anti-rise, pitch angle, …) match the animation.
   useEffect(() => {
-    if (coupled) {
-      setGraphResults(viewModel.analysisResults);
-      return;
-    }
+    if (coupled) return;
     const timer = setTimeout(() => {
       const fixedForkMM =
         (forkCompressionPercent / 100) * viewModel.geometry.forkTravel;
-      setGraphResults(
+      setForkAwareResults(
         runKinematicAnalysis(viewModel.geometry, fixedForkMM),
       );
     }, 100);
     return () => clearTimeout(timer);
   }, [forkCompressionPercent, coupled, viewModel.analysisResults, viewModel.geometry]);
+
+  // When coupled, use the proportional results directly; when uncoupled, use the
+  // fork-aware results (falling back to proportional until the first debounce fires).
+  const graphResults = coupled
+    ? viewModel.analysisResults
+    : (forkAwareResults ?? viewModel.analysisResults);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
