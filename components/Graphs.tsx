@@ -103,7 +103,7 @@ export function Graph({
   const yRange = yMax - yMin || 1;
   const xMax = Math.max(...xData) || 1;
 
-  // Canvas dimensions
+  // Fixed internal coordinate system — SVG scales via viewBox
   const width = 800;
   const height = 300;
   const padding = 40;
@@ -130,10 +130,10 @@ export function Graph({
           {label} ({unit})
         </h3>
       </div>
-      <div className="flex-1 overflow-auto flex items-center justify-center p-4">
+      <div className="flex-1 overflow-hidden flex items-center justify-center p-4">
         <svg
-          width={width}
-          height={height}
+          viewBox={`0 0 ${width} ${height}`}
+          width="100%"
           className="border border-gray-300 dark:border-gray-700 rounded"
         >
           {/* Background grid */}
