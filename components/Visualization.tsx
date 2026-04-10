@@ -8,6 +8,7 @@ import {
   getScreenConversions,
   Point2D,
 } from "@/lib/types";
+import { overrideForkCompression } from "@/lib/kinematics";
 import { GroundLine } from "./visualization/GroundLine";
 import { FrontTriangle } from "./visualization/FrontTriangle";
 import { Swingarm } from "./visualization/Swingarm";
@@ -25,7 +26,8 @@ type VisualizationProps = {
   geometry: BikeGeometry;
   analysisResults: AnalysisResults;
   axlePath?: Point2D[];
-  travelPercentage: number; // 0-100
+  travelPercentage: number; // 0-100, controls rear shock
+  forkCompressionPercent?: number; // 0-100, overrides fork independently
   selectedGraph?: string;
   showCalculations?: boolean;
 };
@@ -34,6 +36,7 @@ export function BikeVisualization({
   geometry,
   analysisResults,
   travelPercentage,
+  forkCompressionPercent,
   selectedGraph,
   axlePath,
   showCalculations = false,
@@ -49,10 +52,20 @@ export function BikeVisualization({
   const stateIndex = Math.floor(
     (travelPercentage / 100) * (analysisResults.states.length - 1),
   );
-  const state =
+  const rawState =
     analysisResults.states[
       Math.max(0, Math.min(stateIndex, analysisResults.states.length - 1))
     ];
+
+  // Override fork positions when an independent fork compression is provided
+  const state =
+    forkCompressionPercent !== undefined
+      ? overrideForkCompression(
+          rawState,
+          (forkCompressionPercent / 100) * geometry.forkTravel,
+          geometry,
+        )
+      : rawState;
 
   const rearAxleWorld = state.rearAxle.world;
   const frontAxleWorld = state.frontAxle.world;
@@ -131,7 +144,7 @@ export function BikeVisualization({
   );
 }
 
-type AnimationViewProps = Omit<VisualizationProps, "travelPercentage"> & {
+type AnimationViewProps = Omit<VisualizationProps, "travelPercentage" | "forkCompressionPercent"> & {
   initialTravelPercentage: number;
   isAnimating: boolean;
   animationSpeed: number;
@@ -144,46 +157,93 @@ export function AnimationView({
   ...props
 }: AnimationViewProps) {
   const axlePath = props.analysisResults.states.map((s) => s.rearAxle.world);
-  const [animProgress, setAnimProgress] = React.useState(
-    initialTravelPercentage,
-  );
+  const [shockPercent, setShockPercent] = React.useState(initialTravelPercentage);
+  const [forkPercent, setForkPercent] = React.useState(initialTravelPercentage);
+  const [coupled, setCoupled] = React.useState(true);
 
   React.useEffect(() => {
     if (!isAnimating) return;
-
     const interval = setInterval(() => {
-      setAnimProgress((prev) => {
+      setShockPercent((prev) => {
         const next = prev + 0.5 * animationSpeed;
-        return next > 100 ? 0 : next;
+        const newVal = next > 100 ? 0 : next;
+        if (coupled) setForkPercent(newVal);
+        return newVal;
       });
     }, 50);
-
     return () => clearInterval(interval);
-  }, [isAnimating, animationSpeed]);
+  }, [isAnimating, animationSpeed, coupled]);
+
+  const handleShockChange = (value: number) => {
+    setShockPercent(value);
+    if (coupled) setForkPercent(value);
+  };
+
+  const handleCoupledChange = (checked: boolean) => {
+    setCoupled(checked);
+    if (checked) setForkPercent(shockPercent);
+  };
 
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-black">
       <BikeVisualization
-        travelPercentage={animProgress}
+        travelPercentage={shockPercent}
+        forkCompressionPercent={forkPercent}
         {...props}
         axlePath={axlePath}
       />
-      <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
-        <div className="flex items-center gap-4">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Travel
+      <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Compression
+          </span>
+          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={coupled}
+              onChange={(e) => handleCoupledChange(e.target.checked)}
+              className="w-4 h-4"
+            />
+            Couple fork &amp; shock
           </label>
+        </div>
+
+        {/* Shock slider */}
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 w-10 text-right">
+            Shock
+          </span>
           <input
             type="range"
             min="0"
             max="100"
             step="0.5"
-            value={animProgress}
-            onChange={(e) => setAnimProgress(parseFloat(e.target.value))}
+            value={shockPercent}
+            onChange={(e) => handleShockChange(parseFloat(e.target.value))}
             className="flex-1 h-2 bg-gray-300 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
           />
-          <span className="text-sm font-mono text-gray-600 dark:text-gray-400 w-12">
-            {animProgress.toFixed(1)}%
+          <span className="text-sm font-mono text-gray-600 dark:text-gray-400 w-12 text-right">
+            {shockPercent.toFixed(1)}%
+          </span>
+        </div>
+
+        {/* Fork slider */}
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 w-10 text-right">
+            Fork
+          </span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="0.5"
+            value={forkPercent}
+            onChange={(e) => setForkPercent(parseFloat(e.target.value))}
+            disabled={coupled}
+            className="flex-1 h-2 bg-gray-300 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          />
+          <span className="text-sm font-mono text-gray-600 dark:text-gray-400 w-12 text-right">
+            {forkPercent.toFixed(1)}%
           </span>
         </div>
       </div>

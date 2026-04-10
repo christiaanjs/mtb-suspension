@@ -591,6 +591,70 @@ export const getApplyPitchRotation =
     };
   };
 
+/**
+ * Re-derives the fork-dependent positions in a BikeState using a new fork
+ * compression value (in mm), recomputing pitch angle and all wheelsOnGround
+ * coordinates accordingly.  Rear-suspension state is left unchanged.
+ */
+export function overrideForkCompression(
+  state: BikeState,
+  forkCompressionMM: number,
+  geometry: BikeGeometry,
+): BikeState {
+  const htaRad = computedProperties.headTubeAngleRadians(geometry);
+  const cosHT = Math.cos(htaRad);
+  const sinHT = Math.sin(htaRad);
+
+  const effectiveForkLength = geometry.forkLength - forkCompressionMM;
+  const headTubeBottomWorld = state.headTubeBottom.world;
+
+  const forkBendWorld: Point2D = {
+    x: headTubeBottomWorld.x + effectiveForkLength * cosHT,
+    y: headTubeBottomWorld.y - effectiveForkLength * sinHT,
+  };
+  const frontAxleWorld: Point2D = {
+    x: headTubeBottomWorld.x + effectiveForkLength * cosHT + geometry.forkOffset * sinHT,
+    y: headTubeBottomWorld.y - effectiveForkLength * sinHT + geometry.forkOffset * cosHT,
+  };
+
+  // Recompute pitch angle from new front axle position
+  const dx = frontAxleWorld.x - state.rearAxle.world.x;
+  const dy = frontAxleWorld.y - state.rearAxle.world.y;
+  const centerDist = Math.sqrt(dx * dx + dy * dy);
+  const centerAngle = Math.atan2(dy, dx);
+  const frontWheelRadius = computedProperties.frontWheelRadius(geometry);
+  const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
+  const radiusDiff = frontWheelRadius - rearWheelRadius;
+  const angleOffset = Math.asin(Math.min(1, Math.max(-1, radiusDiff / centerDist)));
+  const pitchAngleDegrees = ((centerAngle - angleOffset) * 180.0) / Math.PI;
+
+  const applyPitch = getApplyPitchRotation(state.rearAxle.world, pitchAngleDegrees);
+  const toKP = (world: Point2D): KinematicPoint => ({
+    world,
+    wheelsOnGround: applyPitch(world),
+  });
+
+  return {
+    ...state,
+    pitchAngleDegrees,
+    forkCompression: forkCompressionMM,
+    frontAxle: toKP(frontAxleWorld),
+    forkBend: toKP(forkBendWorld),
+    // Re-rotate all other positions with the new pitch
+    rearAxle: toKP(state.rearAxle.world),
+    bb: toKP(state.bb.world),
+    pivot: toKP(state.pivot.world),
+    swingarmEye: toKP(state.swingarmEye.world),
+    headTubeTop: toKP(state.headTubeTop.world),
+    headTubeBottom: toKP(state.headTubeBottom.world),
+    seatTop: toKP(state.seatTop.world),
+    shockFrameMount: toKP(state.shockFrameMount.world),
+    chainringCenter: toKP(state.chainringCenter.world),
+    idler: state.idler ? toKP(state.idler.world) : null,
+    centreOfMass: toKP(state.centreOfMass.world),
+  };
+}
+
 export function getRotatedCentreOfMass(
   state: KinematicState,
   geometry: BikeGeometry,
