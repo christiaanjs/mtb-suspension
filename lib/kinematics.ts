@@ -531,16 +531,23 @@ function getFrontSprocketCircle(
   rearAxlePos: Point2D,
   geometry: BikeGeometry,
 ): Circle {
-  if (geometry.idlerType === IdlerType.None) {
+  if (geometry.idlerType === IdlerType.FrameMounted) {
+    // The chainring→idler segment is frame-fixed and does not apply force to the
+    // swingarm.  The idler acts as the effective "front" of the driving segment
+    // (idler → rear cog) that determines anti-squat.
+    const radius = sprocketRadius(geometry.idlerTeeth);
+    const center = idlerPositionFromWorld(bbPos, pivotPos, rearAxlePos, geometry)!;
+    return { center, radius };
+  } else {
+    // No idler: chainring → rear cog.
+    // Swingarm-mounted idler: the idler→cog segment is internal to the swingarm;
+    // the chainring → idler segment is the one that applies force to the swingarm,
+    // so the chainring is the "front" of the driving segment.
     const center = Point2D.add(bbPos, {
       x: geometry.chainringOffsetX,
       y: geometry.chainringOffsetY,
     });
     return { center, radius: sprocketRadius(geometry.chainringTeeth) };
-  } else {
-    const radius = sprocketRadius(geometry.idlerTeeth);
-    const center = idlerPositionFromWorld(bbPos, pivotPos, rearAxlePos, geometry)!;
-    return { center, radius };
   }
 }
 

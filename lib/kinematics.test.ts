@@ -259,6 +259,36 @@ describe("Anti-Squat and Anti-Rise", () => {
       expect(state.antiRise).toBeLessThan(200);
     }
   });
+
+  describe("with swingarm-mounted idler", () => {
+    // Regression test: getFrontSprocketCircle used to return the idler for both
+    // FrameMounted and SwingarmMounted, making the two circles identical.
+    // tangentPoints(idler, idler) divides by dist=0 → NaN antiSquat.
+    const geometry = createDefaultGeometry({
+      overrides: {
+        idlerType: IdlerType.SwingarmMounted,
+        idlerX: -60,
+        idlerY: 160,
+        idlerTeeth: 16,
+      },
+    });
+
+    it("anti-squat is finite (not NaN) for all travel states", () => {
+      const results = runKinematicAnalysis(geometry);
+      for (const state of results.states) {
+        expect(isNaN(state.antiSquat)).toBe(false);
+        expect(isFinite(state.antiSquat)).toBe(true);
+      }
+    });
+
+    it("anti-squat is in a physically plausible range (0-1000%)", () => {
+      const results = runKinematicAnalysis(geometry);
+      for (const state of results.states) {
+        expect(state.antiSquat).toBeGreaterThan(0);
+        expect(state.antiSquat).toBeLessThan(1000);
+      }
+    });
+  });
 });
 
 describe("Trail", () => {
