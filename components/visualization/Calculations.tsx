@@ -5,7 +5,7 @@ import {
   Point2D,
 } from "@/lib/types";
 import { DrawComponentProps } from "./types";
-import { doAntiSquatCalculations } from "@/lib/kinematics";
+import { doAntiSquatCalculations, doAntiRiseCalculations } from "@/lib/kinematics";
 
 /**
  *
@@ -212,10 +212,7 @@ const AntiSquatCalculations = ({
   state,
   geometry,
 }: DrawComponentProps) => {
-  const calculations = doAntiSquatCalculations(state, geometry, {
-    warn: true,
-  });
-  console.log("Drawing anti squat", calculations);
+  const calculations = doAntiSquatCalculations(state, geometry);
   return (
     <>
       <ReferenceLine line={calculations.chainForce} conversion={conversion} />
@@ -251,14 +248,44 @@ const AntiSquatCalculations = ({
   );
 };
 
+const AntiRiseCalculations = ({
+  conversion,
+  state,
+  geometry,
+}: DrawComponentProps) => {
+  const calculations = doAntiRiseCalculations(state, geometry);
+  return (
+    <>
+      <ReferenceLine line={calculations.forceLine} conversion={conversion} />
+      {"antiRiseIntersection" in calculations && (
+        <>
+          <ReferenceVerticalLine
+            x={calculations.frontContactPatch.x}
+            conversion={conversion}
+          />
+          <ReferencePoint
+            point={calculations.antiRiseIntersection}
+            conversion={conversion}
+          />
+          <ReferenceHorizontalLine
+            y={calculations.centreOfMassHeight}
+            conversion={conversion}
+          />
+        </>
+      )}
+    </>
+  );
+};
+
 export const Calculations = ({
   selectedGraph,
   ...props
 }: DrawComponentProps & { selectedGraph: string }) => {
-  console.log("Drawing calculations for " + selectedGraph);
   switch (selectedGraph) {
     case GraphType.AntiSquat:
       return <AntiSquatCalculations {...props} />;
+    case GraphType.AntiRise:
+      return <AntiRiseCalculations {...props} />;
     default:
       return null;
   }
