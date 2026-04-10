@@ -148,47 +148,61 @@ type AnimationViewProps = Omit<VisualizationProps, "travelPercentage" | "forkCom
   initialTravelPercentage: number;
   isAnimating: boolean;
   animationSpeed: number;
+  /** Controlled: current fork compression percentage (0-100) */
+  forkCompressionPercent: number;
+  /** Controlled: whether fork and shock move together */
+  coupled: boolean;
+  onForkCompressionChange: (percent: number) => void;
+  onCoupledChange: (coupled: boolean) => void;
 };
 
 export function AnimationView({
   initialTravelPercentage,
   isAnimating,
   animationSpeed,
+  forkCompressionPercent,
+  coupled,
+  onForkCompressionChange,
+  onCoupledChange,
   ...props
 }: AnimationViewProps) {
   const axlePath = props.analysisResults.states.map((s) => s.rearAxle.world);
+  // Shock position is kept local — it drives animation independently of fork
   const [shockPercent, setShockPercent] = React.useState(initialTravelPercentage);
-  const [forkPercent, setForkPercent] = React.useState(initialTravelPercentage);
-  const [coupled, setCoupled] = React.useState(true);
 
   React.useEffect(() => {
     if (!isAnimating) return;
     const interval = setInterval(() => {
       setShockPercent((prev) => {
         const next = prev + 0.5 * animationSpeed;
-        const newVal = next > 100 ? 0 : next;
-        if (coupled) setForkPercent(newVal);
-        return newVal;
+        return next > 100 ? 0 : next;
       });
     }, 50);
     return () => clearInterval(interval);
-  }, [isAnimating, animationSpeed, coupled]);
+  }, [isAnimating, animationSpeed]);
 
   const handleShockChange = (value: number) => {
     setShockPercent(value);
-    if (coupled) setForkPercent(value);
+    if (coupled) onForkCompressionChange(value);
   };
 
   const handleCoupledChange = (checked: boolean) => {
-    setCoupled(checked);
-    if (checked) setForkPercent(shockPercent);
+    onCoupledChange(checked);
+    if (!checked) {
+      // Initialise fork at current shock position when uncoupling
+      onForkCompressionChange(shockPercent);
+    }
   };
+
+  // When coupled, the visual fork follows shock; when uncoupled it follows the
+  // controlled forkCompressionPercent.
+  const effectiveForkPercent = coupled ? shockPercent : forkCompressionPercent;
 
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-black">
       <BikeVisualization
         travelPercentage={shockPercent}
-        forkCompressionPercent={forkPercent}
+        forkCompressionPercent={effectiveForkPercent}
         {...props}
         axlePath={axlePath}
       />
@@ -237,13 +251,13 @@ export function AnimationView({
             min="0"
             max="100"
             step="0.5"
-            value={forkPercent}
-            onChange={(e) => setForkPercent(parseFloat(e.target.value))}
+            value={forkCompressionPercent}
+            onChange={(e) => onForkCompressionChange(parseFloat(e.target.value))}
             disabled={coupled}
             className="flex-1 h-2 bg-gray-300 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           />
           <span className="text-sm font-mono text-gray-600 dark:text-gray-400 w-12 text-right">
-            {forkPercent.toFixed(1)}%
+            {forkCompressionPercent.toFixed(1)}%
           </span>
         </div>
       </div>

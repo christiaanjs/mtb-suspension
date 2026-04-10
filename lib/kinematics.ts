@@ -43,7 +43,19 @@ interface FirstPassState {
   proportionalForkStroke: number;
 }
 
-export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
+/**
+ * Run a full kinematic sweep across the shock stroke range.
+ *
+ * @param fixedForkCompressionMM  When provided, every state in the sweep uses
+ *   this constant fork compression instead of the proportional value derived
+ *   from shock travel.  Pass this when fork and shock are uncoupled so that
+ *   computed metrics (trail, anti-squat, anti-rise, pitch, …) reflect the
+ *   actual fork position being displayed.
+ */
+export function runKinematicAnalysis(
+  geometry: BikeGeometry,
+  fixedForkCompressionMM?: number,
+): AnalysisResults {
   const rigidTriangle = establishRigidTriangle(geometry);
 
   const stepSize = 0.5; // mm - finer steps for smoother graphs
@@ -54,7 +66,10 @@ export function runKinematicAnalysis(geometry: BikeGeometry): AnalysisResults {
   for (let step = 0; step < strokeSteps; step++) {
     const shockStroke = step * stepSize;
     const travelRatio = shockStroke / geometry.shockStroke;
-    const proportionalForkStroke = travelRatio * geometry.forkTravel;
+    const proportionalForkStroke =
+      fixedForkCompressionMM !== undefined
+        ? fixedForkCompressionMM
+        : travelRatio * geometry.forkTravel;
     const state = calculateStateAtShockStroke(shockStroke, geometry, rigidTriangle);
     firstPassStates.push({ ...state, proportionalForkStroke });
   }
