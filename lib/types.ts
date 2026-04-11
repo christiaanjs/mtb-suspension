@@ -48,6 +48,8 @@ export enum IdlerType {
   SwingarmMounted = "Swingarm Mounted",
 }
 
+export type SuspensionType = "single-pivot" | "four-bar";
+
 export interface BikeGeometry {
   // Frame - Primary Inputs
   bbHeight: number; // mm from ground
@@ -99,6 +101,20 @@ export interface BikeGeometry {
 
   // Frame Details
   seatTubeLength: number; // mm (vertical height)
+
+  // Suspension type (undefined = 'single-pivot' for backward compat)
+  suspensionType?: SuspensionType;
+
+  // 4-bar / Horst link parameters (used when suspensionType === 'four-bar')
+  // All positions relative to BB at top-out (same convention as bbToPivotX/Y)
+  bbToHorstFramePivotX?: number; // Frame pivot B (Horst link frame mount), X from BB
+  bbToHorstFramePivotY?: number; // Frame pivot B, Y from BB
+  horstCouplerPivotCX?: number;  // Coupler pivot C (connects to A) at top-out, X from BB
+  horstCouplerPivotCY?: number;  // Coupler pivot C at top-out, Y from BB
+  horstCouplerPivotDX?: number;  // Coupler pivot D (connects to B) at top-out, X from BB
+  horstCouplerPivotDY?: number;  // Coupler pivot D at top-out, Y from BB
+  horstShockCouplerMountX?: number; // Shock coupler mount S at top-out, X from BB
+  horstShockCouplerMountY?: number; // Shock coupler mount S at top-out, Y from BB
 }
 
 export function createDefaultGeometry({
@@ -138,6 +154,16 @@ export function createDefaultGeometry({
     forkTravel: 170.0,
     forkCompressionPercent: 0.0,
     seatTubeLength: 320.0,
+    suspensionType: "single-pivot",
+    // 4-bar defaults: a plausible Horst-link geometry (ignored when single-pivot)
+    bbToHorstFramePivotX: 20.0,
+    bbToHorstFramePivotY: 150.0,
+    horstCouplerPivotCX: -80.0,
+    horstCouplerPivotCY: 210.0,
+    horstCouplerPivotDX: 200.0,
+    horstCouplerPivotDY: 40.0,
+    horstShockCouplerMountX: 60.0,
+    horstShockCouplerMountY: 170.0,
     ...overrides,
   };
 }
@@ -160,6 +186,11 @@ export interface KinematicState {
   bb: KinematicPoint;
   pivot: KinematicPoint;
   swingarmEye: KinematicPoint;
+
+  // 4-bar / Horst link positions (undefined for single-pivot)
+  horstLinkPivotB?: KinematicPoint; // Secondary frame pivot B
+  horstJointC?: KinematicPoint;     // Coupler pivot C (connects to A)
+  horstJointD?: KinematicPoint;     // Coupler pivot D (connects to B)
 
   // Dynamics
   leverageRatio: number;
@@ -209,6 +240,39 @@ export enum GraphType {
 export interface BikeDesign {
   name: string;
   geometry: BikeGeometry;
+}
+
+// Standalone linkage geometry used by the /linkage page.
+// All positions are in world frame (Y measured from ground; Y=0 is ground level).
+export interface LinkageGeometry {
+  pivotA: Point2D;          // Main frame pivot (connects to coupler at C)
+  pivotB: Point2D;          // Horst link frame pivot (connects to coupler at D)
+  jointC: Point2D;          // Coupler pivot C at top-out (connects to A)
+  jointD: Point2D;          // Coupler pivot D at top-out (connects to B)
+  axleE: Point2D;           // Rear axle position at top-out
+  shockFrameMount: Point2D; // Shock frame-side mount
+  shockCouplerMount: Point2D; // Shock coupler-side mount at top-out
+  shockETE: number;         // Eye-to-eye at top-out (mm)
+  shockStroke: number;      // Total shock stroke (mm)
+  shockSpringRate: number;  // Spring rate (N/mm)
+  rearWheelRadius: number;  // mm
+}
+
+export function createDefaultLinkageGeometry(): LinkageGeometry {
+  // A plausible Horst-link layout in world frame (Y = height above ground)
+  return {
+    pivotA: { x: -80, y: 540 },        // Main pivot (near BB height)
+    pivotB: { x: 20, y: 480 },         // Horst link frame mount (lower, slightly forward)
+    jointC: { x: -80, y: 540 },        // C = A at top-out (for default: C coincides with A to start)
+    jointD: { x: 200, y: 370 },        // D near axle (Horst link coupler end)
+    axleE: { x: 360, y: 375 },         // Rear axle at top-out
+    shockFrameMount: { x: 30, y: 400 },
+    shockCouplerMount: { x: 60, y: 500 },
+    shockETE: 210,
+    shockStroke: 65,
+    shockSpringRate: 60,
+    rearWheelRadius: 375,
+  };
 }
 
 export const computedProperties = {

@@ -23,6 +23,11 @@ import {
   lineIntersectionWithVertical,
   degreesToRadians,
 } from "./geometry";
+import {
+  FourBarSetup,
+  establishFourBarLinkage,
+  calculateFourBarStateAtShockStroke,
+} from "./fourBarKinematics";
 
 interface RigidTriangle {
   pivotToEye: number;
@@ -37,10 +42,15 @@ interface FirstPassState {
   travelMM: number;
   rearAxlePosition: Point2D;
   bbPosition: Point2D;
-  pivotPosition: Point2D;
+  pivotPosition: Point2D;      // single-pivot: swingarm pivot; 4-bar: main frame pivot A
   swingarmEyePosition: Point2D;
   shockLength: number;
   proportionalForkStroke: number;
+  // 4-bar / Horst link only (undefined for single-pivot):
+  instantCenter?: Point2D | null;      // virtual pivot = intersection of lines A-C and B-D
+  horstLinkPivotBPosition?: Point2D;   // B adjusted for ground offset
+  horstJointCPosition?: Point2D;       // C adjusted for ground offset
+  horstJointDPosition?: Point2D;       // D adjusted for ground offset
 }
 
 /**
@@ -56,7 +66,12 @@ export function runKinematicAnalysis(
   geometry: BikeGeometry,
   fixedForkCompressionMM?: number,
 ): AnalysisResults {
-  const rigidTriangle = establishRigidTriangle(geometry);
+  const isFourBar = geometry.suspensionType === "four-bar";
+  let fourBarSetup: FourBarSetup | null = null;
+  const rigidTriangle = !isFourBar ? establishRigidTriangle(geometry) : null;
+  if (isFourBar) {
+    fourBarSetup = establishFourBarLinkage(geometry);
+  }
 
   const stepSize = 0.5; // mm - finer steps for smoother graphs
   const strokeSteps = Math.floor(geometry.shockStroke / stepSize) + 1;
@@ -70,7 +85,30 @@ export function runKinematicAnalysis(
       fixedForkCompressionMM !== undefined
         ? fixedForkCompressionMM
         : travelRatio * geometry.forkTravel;
-    const state = calculateStateAtShockStroke(shockStroke, geometry, rigidTriangle);
+
+    let state: Omit<FirstPassState, "proportionalForkStroke">;
+    if (isFourBar && fourBarSetup) {
+      const raw = calculateFourBarStateAtShockStroke(
+        shockStroke,
+        geometry.shockETE,
+        geometry.bbHeight,
+        fourBarSetup,
+      );
+      state = {
+        travelMM: raw.travelMM,
+        rearAxlePosition: raw.rearAxlePosition,
+        bbPosition: raw.bbPosition,
+        pivotPosition: raw.pivotPosition,
+        swingarmEyePosition: raw.swingarmEyePosition,
+        shockLength: raw.shockLength,
+        instantCenter: raw.instantCenter,
+        horstLinkPivotBPosition: raw.horstLinkPivotBPosition,
+        horstJointCPosition: raw.horstJointCPosition,
+        horstJointDPosition: raw.horstJointDPosition,
+      };
+    } else {
+      state = calculateStateAtShockStroke(shockStroke, geometry, rigidTriangle!);
+    }
     firstPassStates.push({ ...state, proportionalForkStroke });
   }
 
@@ -197,6 +235,9 @@ export function runKinematicAnalysis(
       travelMM: fp.travelMM,
       shockLength: fp.shockLength,
       pitchAngleDegrees,
+      horstLinkPivotB: fp.horstLinkPivotBPosition ? toKP(fp.horstLinkPivotBPosition) : undefined,
+      horstJointC: fp.horstJointCPosition ? toKP(fp.horstJointCPosition) : undefined,
+      horstJointD: fp.horstJointDPosition ? toKP(fp.horstJointDPosition) : undefined,
       forkCompression: fp.proportionalForkStroke,
       rearAxle: toKP(fp.rearAxlePosition),
       frontAxle: toKP(frontAxlePos),
@@ -674,6 +715,9 @@ export function overrideForkCompression(
     chainringCenter: toKP(state.chainringCenter.world),
     idler: state.idler ? toKP(state.idler.world) : null,
     centreOfMass: toKP(state.centreOfMass.world),
+    horstLinkPivotB: state.horstLinkPivotB ? toKP(state.horstLinkPivotB.world) : undefined,
+    horstJointC: state.horstJointC ? toKP(state.horstJointC.world) : undefined,
+    horstJointD: state.horstJointD ? toKP(state.horstJointD.world) : undefined,
   };
 }
 
@@ -817,9 +861,11 @@ function calculateVisualAntiSquat(
   applyPitchRotation: (p: Point2D) => Point2D,
   opts: { sprocketTangent?: boolean } = {},
 ): number {
+  // For 4-bar, use the instant center (virtual pivot) instead of the fixed frame pivot.
+  const virtualPivot = (fp.instantCenter != null ? fp.instantCenter : null) ?? fp.pivotPosition;
   const calculations = computeAntiSquatSteps(
     fp.bbPosition,
-    fp.pivotPosition,
+    virtualPivot,
     fp.rearAxlePosition,
     frontAxlePos,
     applyPitchRotation,
@@ -837,7 +883,9 @@ function calculateVisualAntiRise(
   geometry: BikeGeometry,
   applyPitchRotation: (p: Point2D) => Point2D,
 ): number {
-  const instantCenter = applyPitchRotation(fp.pivotPosition);
+  // For 4-bar, use the instant center (virtual pivot) for the suspension force line.
+  const virtualPivot = (fp.instantCenter != null ? fp.instantCenter : null) ?? fp.pivotPosition;
+  const instantCenter = applyPitchRotation(virtualPivot);
   const rearAxleRotated = applyPitchRotation(fp.rearAxlePosition);
   const frontAxleRotated = applyPitchRotation(frontAxlePos);
 
