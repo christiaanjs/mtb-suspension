@@ -164,11 +164,13 @@ export function AnimationView({
   coupled,
   onForkCompressionChange,
   onCoupledChange,
+  showCalculations: initialShowCalculations = true,
   ...props
 }: AnimationViewProps) {
-  const axlePath = props.analysisResults.states.map((s) => s.rearAxle.world);
+  const axlePath = props.analysisResults.axlePath;
   // Shock position is kept local — it drives animation independently of fork
   const [shockPercent, setShockPercent] = React.useState(initialTravelPercentage);
+  const [showWorkingLines, setShowWorkingLines] = React.useState(initialShowCalculations);
 
   React.useEffect(() => {
     if (!isAnimating) return;
@@ -205,21 +207,33 @@ export function AnimationView({
         forkCompressionPercent={effectiveForkPercent}
         {...props}
         axlePath={axlePath}
+        showCalculations={showWorkingLines}
       />
       <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
             Compression
           </span>
-          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={coupled}
-              onChange={(e) => handleCoupledChange(e.target.checked)}
-              className="w-4 h-4"
-            />
-            Couple fork &amp; shock
-          </label>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showWorkingLines}
+                onChange={(e) => setShowWorkingLines(e.target.checked)}
+                className="w-4 h-4"
+              />
+              Working lines
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={coupled}
+                onChange={(e) => handleCoupledChange(e.target.checked)}
+                className="w-4 h-4"
+              />
+              Couple fork &amp; shock
+            </label>
+          </div>
         </div>
 
         {/* Shock slider */}

@@ -200,6 +200,7 @@ export enum GraphType {
   AntiRise = "Anti-Rise",
   PedalKickback = "Pedal Kickback",
   AxlePath = "Wheel Path",
+  RearCenter = "Rear Center",
   ChainGrowth = "Chain Growth",
   WheelRate = "Wheel Rate",
   Trail = "Trail",

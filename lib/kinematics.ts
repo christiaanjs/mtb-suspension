@@ -810,6 +810,54 @@ export const doAntiSquatCalculations = (
   );
 };
 
+// ---- Anti-rise types (exported for Calculations.tsx) ----
+type AntiRiseStep1 = {
+  forceLine: LineSegment; // rear axle → instant center (pivot)
+};
+type AntiRiseFinal = AntiRiseStep1 & {
+  antiRiseIntersection: Point2D;
+  frontContactPatch: Point2D;
+  centreOfMassHeight: number;
+};
+export type AntiRiseCalculations = AntiRiseStep1 | AntiRiseFinal;
+
+// Exported: used by Calculations.tsx to display anti-rise force lines
+export const doAntiRiseCalculations = (
+  state: KinematicState,
+  geometry: BikeGeometry,
+): AntiRiseCalculations => {
+  const applyPitchRotation = getApplyPitchRotation(
+    state.rearAxle.world,
+    state.pitchAngleDegrees,
+  );
+
+  const instantCenter = applyPitchRotation(state.pivot.world);
+  const rearAxleRotated = applyPitchRotation(state.rearAxle.world);
+  const frontAxleRotated = applyPitchRotation(state.frontAxle.world);
+
+  const step1: AntiRiseStep1 = {
+    forceLine: { start: rearAxleRotated, end: instantCenter },
+  };
+
+  const antiRiseIntersection = lineIntersectionWithVertical(
+    rearAxleRotated,
+    instantCenter,
+    frontAxleRotated.x,
+  );
+  if (!antiRiseIntersection) return step1;
+
+  const centreOfMassHeight = applyPitchRotation(
+    Point2D.add(state.bb.world, { x: geometry.comX, y: geometry.comY }),
+  ).y;
+
+  return {
+    ...step1,
+    antiRiseIntersection,
+    frontContactPatch: { x: frontAxleRotated.x, y: 0 },
+    centreOfMassHeight,
+  } satisfies AntiRiseFinal;
+};
+
 function calculateVisualAntiSquat(
   fp: FirstPassState,
   frontAxlePos: Point2D,
