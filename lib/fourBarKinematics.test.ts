@@ -26,15 +26,16 @@ function makeTestGeometry() {
       bbToPivotY: 210,
       swingarmLength: 275,
       // 4-bar specific: all relative to BB (bbHeight=330)
+      // A=(0,540), B=(0,480), C0=(80,480), D0=(80,420), S0=(110,480)
       bbToHorstFramePivotX: 0,
       bbToHorstFramePivotY: 150,
-      horstCouplerPivotCX: 80,
-      horstCouplerPivotCY: 150,
-      horstCouplerPivotDX: 80,
-      horstCouplerPivotDY: 90,
-      // S0 = (110, 480): 30mm right of C0 in coupler frame
-      horstShockCouplerMountX: 110,
-      horstShockCouplerMountY: 150,
+      horstArmLength: 100,       // |A-C0| = sqrt(80²+60²) = 100
+      horstCrankAngleDeg: -36.87, // atan2(-60,80)
+      horstCouplerLength: 60,    // |C0-D0| = 60 (straight down)
+      horstLinkLength: 100,      // |B-D0| = sqrt(80²+60²) = 100
+      // S0 = (110, 480): 30mm right of C0 in coupler frame (couplerAngle=-90°, perp=(1,0))
+      horstShockMountForward: 0,
+      horstShockMountPerp: 30,
       // F = (110, 690): directly above S0, |F-S0| = 690-480 = 210 = shockETE
       shockFrameMountX: 110,
       shockFrameMountY: 360,

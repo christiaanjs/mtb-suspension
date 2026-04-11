@@ -59,10 +59,11 @@ export function LinkageDiagram({ geometry, results, travelPercent }: Props) {
   const axlePathStr = pointsStr(results.axlePath.map(tc));
 
   return (
+    <div className="flex flex-col items-center gap-2 max-w-full max-h-full">
     <svg
       width={conv.width}
       height={conv.height}
-      className="max-w-full max-h-full"
+      className="max-w-full"
       style={{ display: "block" }}
     >
       {/* Ground line */}
@@ -133,5 +134,38 @@ export function LinkageDiagram({ geometry, results, travelPercent }: Props) {
       <text x={D.x + 6} y={D.y + 14} fontSize="10" fill="#f97316">D</text>
       <text x={E.x + 8} y={E.y + 4} fontSize="10" fill="#9ca3af">E</text>
     </svg>
+
+    {/* Legend */}
+    <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-400 px-2">
+      <span className="flex items-center gap-1">
+        <svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke="#f97316" strokeWidth="2"/></svg>
+        Arms (A–C, B–D)
+      </span>
+      <span className="flex items-center gap-1">
+        <svg width="20" height="10"><rect x="0" y="1" width="20" height="8" fill="#f9731620" stroke="#f97316" strokeWidth="1.5"/></svg>
+        Coupler body
+      </span>
+      <span className="flex items-center gap-1">
+        <svg width="20" height="10"><circle cx="5" cy="5" r="4" fill="white" stroke="#eab308" strokeWidth="2"/><circle cx="15" cy="5" r="3" fill="white" stroke="#eab308" strokeWidth="1.5"/></svg>
+        Pivots A, B / Joints C, D
+      </span>
+      <span className="flex items-center gap-1">
+        <svg width="14" height="10"><circle cx="7" cy="5" r="5" fill="#6b7280"/></svg>
+        Rear axle (E)
+      </span>
+      <span className="flex items-center gap-1">
+        <svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke="#8b5cf6" strokeWidth="2.5"/></svg>
+        Shock (F–S)
+      </span>
+      <span className="flex items-center gap-1">
+        <svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="3 3"/></svg>
+        Axle path
+      </span>
+      <span className="flex items-center gap-1">
+        <svg width="14" height="10"><circle cx="7" cy="5" r="4" fill="none" stroke="#10b981" strokeWidth="1.5"/></svg>
+        Virtual pivot
+      </span>
+    </div>
+    </div>
   );
 }

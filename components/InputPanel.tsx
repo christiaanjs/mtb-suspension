@@ -238,59 +238,60 @@ export function InputPanel({
                 className="ml-2"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                Coupler Pivot C at top-out (from BB):
+                Link lengths:
               </p>
               <InputField
-                label="  C X (mm)"
-                value={geometry.horstCouplerPivotCX ?? 0}
+                label="  Main Arm A–C (mm)"
+                value={geometry.horstArmLength ?? 100}
                 onChange={(val) =>
-                  onGeometryChange({ horstCouplerPivotCX: val as number })
+                  onGeometryChange({ horstArmLength: val as number })
                 }
+                min={1}
                 className="ml-2"
               />
               <InputField
-                label="  C Y (mm)"
-                value={geometry.horstCouplerPivotCY ?? 0}
+                label="  Arm Angle at Top-out (°)"
+                value={geometry.horstCrankAngleDeg ?? 0}
                 onChange={(val) =>
-                  onGeometryChange({ horstCouplerPivotCY: val as number })
+                  onGeometryChange({ horstCrankAngleDeg: val as number })
                 }
+                step={0.5}
+                className="ml-2"
+              />
+              <InputField
+                label="  Coupler C–D (mm)"
+                value={geometry.horstCouplerLength ?? 60}
+                onChange={(val) =>
+                  onGeometryChange({ horstCouplerLength: val as number })
+                }
+                min={1}
+                className="ml-2"
+              />
+              <InputField
+                label="  Horst Link B–D (mm)"
+                value={geometry.horstLinkLength ?? 100}
+                onChange={(val) =>
+                  onGeometryChange({ horstLinkLength: val as number })
+                }
+                min={1}
                 className="ml-2"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                Coupler Pivot D at top-out (from BB):
+                Shock coupler mount S (on coupler body, C→D frame):
               </p>
               <InputField
-                label="  D X (mm)"
-                value={geometry.horstCouplerPivotDX ?? 0}
+                label="  Along arm (mm)"
+                value={geometry.horstShockMountForward ?? 0}
                 onChange={(val) =>
-                  onGeometryChange({ horstCouplerPivotDX: val as number })
+                  onGeometryChange({ horstShockMountForward: val as number })
                 }
                 className="ml-2"
               />
               <InputField
-                label="  D Y (mm)"
-                value={geometry.horstCouplerPivotDY ?? 0}
+                label="  Off arm (mm)"
+                value={geometry.horstShockMountPerp ?? 30}
                 onChange={(val) =>
-                  onGeometryChange({ horstCouplerPivotDY: val as number })
-                }
-                className="ml-2"
-              />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                Shock Coupler Mount S at top-out (from BB):
-              </p>
-              <InputField
-                label="  S X (mm)"
-                value={geometry.horstShockCouplerMountX ?? 0}
-                onChange={(val) =>
-                  onGeometryChange({ horstShockCouplerMountX: val as number })
-                }
-                className="ml-2"
-              />
-              <InputField
-                label="  S Y (mm)"
-                value={geometry.horstShockCouplerMountY ?? 0}
-                onChange={(val) =>
-                  onGeometryChange({ horstShockCouplerMountY: val as number })
+                  onGeometryChange({ horstShockMountPerp: val as number })
                 }
                 className="ml-2"
               />

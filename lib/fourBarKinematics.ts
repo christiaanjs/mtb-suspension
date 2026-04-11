@@ -2,7 +2,7 @@
 // Shared between the main bike simulation (kinematics.ts) and the linkage page (linkageAnalysis.ts)
 
 import { BikeGeometry, LinkageGeometry, Point2D, computedProperties } from "./types";
-import { circleCircleIntersection, distance, angle } from "./geometry";
+import { circleCircleIntersection, distance, angle, resolveCouplerFromLengths } from "./geometry";
 
 // Pre-computed setup for the 4-bar mechanism, analogous to RigidTriangle in single-pivot.
 export interface FourBarSetup {
@@ -46,18 +46,16 @@ export function establishFourBarLinkage(geometry: BikeGeometry): FourBarSetup {
     x: geometry.bbToHorstFramePivotX!,
     y: bbY + geometry.bbToHorstFramePivotY!,
   };
-  const C0: Point2D = {
-    x: geometry.horstCouplerPivotCX!,
-    y: bbY + geometry.horstCouplerPivotCY!,
-  };
-  const D0: Point2D = {
-    x: geometry.horstCouplerPivotDX!,
-    y: bbY + geometry.horstCouplerPivotDY!,
-  };
-  const S0: Point2D = {
-    x: geometry.horstShockCouplerMountX!,
-    y: bbY + geometry.horstShockCouplerMountY!,
-  };
+  const { C: C0, D: D0, S: S0 } = resolveCouplerFromLengths(
+    A,
+    geometry.horstArmLength!,
+    geometry.horstCrankAngleDeg!,
+    B,
+    geometry.horstCouplerLength!,
+    geometry.horstLinkLength!,
+    geometry.horstShockMountForward!,
+    geometry.horstShockMountPerp!,
+  );
   const F: Point2D = {
     x: geometry.shockFrameMountX,
     y: bbY + geometry.shockFrameMountY,

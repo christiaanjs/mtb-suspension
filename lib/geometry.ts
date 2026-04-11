@@ -185,6 +185,43 @@ export function sprocketRadius(teeth: number): number {
   return (teeth * pitch) / (2 * Math.PI);
 }
 
+// Compute the coupler pivot positions (C, D) and shock coupler mount (S)
+// from the length-based 4-bar parameterisation.
+//   A, armLength, crankAngleDeg → C (always exact)
+//   C, couplerLength, B, horstLength → D (circle-circle intersection; lower-Y candidate)
+//   C, D angle, shockMountForward/Perp → S (in C→D coupler body frame)
+export function resolveCouplerFromLengths(
+  A: Point2D, armLength: number, crankAngleDeg: number,
+  B: Point2D, couplerLength: number, horstLength: number,
+  shockMountForward: number, shockMountPerp: number,
+): { C: Point2D; D: Point2D; S: Point2D } {
+  const alpha0 = degreesToRadians(crankAngleDeg);
+  const C: Point2D = {
+    x: A.x + armLength * Math.cos(alpha0),
+    y: A.y + armLength * Math.sin(alpha0),
+  };
+
+  const dCandidates = circleCircleIntersection(C, couplerLength, B, horstLength);
+  let D: Point2D;
+  if (dCandidates.length === 0) {
+    D = { x: C.x, y: C.y - couplerLength };
+  } else if (dCandidates.length === 1) {
+    D = dCandidates[0];
+  } else {
+    // Convention: D is always the lower candidate (below coupler pivot C in Horst-link geometry)
+    D = dCandidates[0].y <= dCandidates[1].y ? dCandidates[0] : dCandidates[1];
+  }
+
+  const couplerAngle = Math.atan2(D.y - C.y, D.x - C.x);
+  const cosCA = Math.cos(couplerAngle), sinCA = Math.sin(couplerAngle);
+  const S: Point2D = {
+    x: C.x + shockMountForward * cosCA + shockMountPerp * (-sinCA),
+    y: C.y + shockMountForward * sinCA + shockMountPerp * cosCA,
+  };
+
+  return { C, D, S };
+}
+
 export function circleCircleIntersection(
   center1: Point2D,
   radius1: number,

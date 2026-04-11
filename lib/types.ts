@@ -1,7 +1,7 @@
 // MTB Suspension Analyzer Types
 // Ported from Swift app
 
-import { degreesToRadians, circleCircleIntersection } from "./geometry";
+import { degreesToRadians, resolveCouplerFromLengths } from "./geometry";
 
 export interface Point2D {
   x: number;
@@ -106,15 +106,18 @@ export interface BikeGeometry {
   suspensionType?: SuspensionType;
 
   // 4-bar / Horst link parameters (used when suspensionType === 'four-bar')
-  // All positions relative to BB at top-out (same convention as bbToPivotX/Y)
-  bbToHorstFramePivotX?: number; // Frame pivot B (Horst link frame mount), X from BB
+  // Frame pivot B is still given as a BB-relative coordinate (same convention as bbToPivotX/Y).
+  // C, D and S are derived from link lengths so the geometry is always self-consistent.
+  bbToHorstFramePivotX?: number; // Frame pivot B, X from BB
   bbToHorstFramePivotY?: number; // Frame pivot B, Y from BB
-  horstCouplerPivotCX?: number;  // Coupler pivot C (connects to A) at top-out, X from BB
-  horstCouplerPivotCY?: number;  // Coupler pivot C at top-out, Y from BB
-  horstCouplerPivotDX?: number;  // Coupler pivot D (connects to B) at top-out, X from BB
-  horstCouplerPivotDY?: number;  // Coupler pivot D at top-out, Y from BB
-  horstShockCouplerMountX?: number; // Shock coupler mount S at top-out, X from BB
-  horstShockCouplerMountY?: number; // Shock coupler mount S at top-out, Y from BB
+  horstArmLength?: number;       // |A–C| — main arm length
+  horstCrankAngleDeg?: number;   // Angle of A→C at top-out, degrees from horizontal
+  horstCouplerLength?: number;   // |C–D| — coupler link length
+  horstLinkLength?: number;      // |B–D| — Horst link length
+  // Shock coupler mount S in the C→D coupler body frame:
+  //   forward = along C→D; perp = 90° CCW (negative = below the arm)
+  horstShockMountForward?: number;
+  horstShockMountPerp?: number;
 }
 
 export function createDefaultGeometry({
@@ -155,15 +158,18 @@ export function createDefaultGeometry({
     forkCompressionPercent: 0.0,
     seatTubeLength: 320.0,
     suspensionType: "single-pivot",
-    // 4-bar defaults: a plausible Horst-link geometry (ignored when single-pivot)
-    bbToHorstFramePivotX: 20.0,
+    // 4-bar defaults (ignored when single-pivot).
+    // With bbToPivotX=-80, bbToPivotY=210, bbHeight=330:
+    //   A=(-80,540), B=(-80,480), C=(0,480), D=(0,420), S=(30,610), F=(30,400)
+    //   |F-S|=210 = shockETE ✓
+    bbToHorstFramePivotX: -80.0,
     bbToHorstFramePivotY: 150.0,
-    horstCouplerPivotCX: -80.0,
-    horstCouplerPivotCY: 210.0,
-    horstCouplerPivotDX: 200.0,
-    horstCouplerPivotDY: 40.0,
-    horstShockCouplerMountX: 60.0,
-    horstShockCouplerMountY: 170.0,
+    horstArmLength: 100.0,
+    horstCrankAngleDeg: -36.87,
+    horstCouplerLength: 60.0,
+    horstLinkLength: 100.0,
+    horstShockMountForward: -130.0,
+    horstShockMountPerp: 30.0,
     ...overrides,
   };
 }
@@ -335,46 +341,22 @@ export function createDefaultLinkageLengthParams(): LinkageLengthParams {
 // a valid (though possibly degenerate if link lengths violate the triangle
 // inequality) coordinate set.
 export function lengthParamsToCoordinates(p: LinkageLengthParams): LinkageGeometry {
-  const alpha0 = degreesToRadians(p.crankAngleDeg);
-  const A = p.pivotA;
+  const { C, D, S } = resolveCouplerFromLengths(
+    p.pivotA, p.armLength, p.crankAngleDeg,
+    p.pivotB, p.couplerLength, p.horstLength,
+    p.shockMountForward, p.shockMountPerp,
+  );
 
-  // C = A + armLength * (cos α, sin α)
-  const C: Point2D = {
-    x: A.x + p.armLength * Math.cos(alpha0),
-    y: A.y + p.armLength * Math.sin(alpha0),
-  };
-
-  // D = one of the two intersections of circle(C, couplerLength) and circle(B, horstLength).
-  // Convention: pick the candidate with the lower Y value (D is always below C in a
-  // Horst-link design).  Falls back to a straight-down point when circles don't intersect.
-  const dCandidates = circleCircleIntersection(C, p.couplerLength, p.pivotB, p.horstLength);
-  let D: Point2D;
-  if (dCandidates.length === 0) {
-    D = { x: C.x, y: C.y - p.couplerLength };
-  } else if (dCandidates.length === 1) {
-    D = dCandidates[0];
-  } else {
-    D = dCandidates[0].y <= dCandidates[1].y ? dCandidates[0] : dCandidates[1];
-  }
-
-  // Coupler body frame at top-out: forward = C→D direction, perp = 90° CCW
+  // Axle uses its own coupler-body offsets (axleForward / axlePerp)
   const couplerAngle = Math.atan2(D.y - C.y, D.x - C.x);
-  const cosA = Math.cos(couplerAngle);
-  const sinA = Math.sin(couplerAngle);
-  const fwdX = cosA, fwdY = sinA;
-  const perpX = -sinA, perpY = cosA;
-
+  const cosCA = Math.cos(couplerAngle), sinCA = Math.sin(couplerAngle);
   const E: Point2D = {
-    x: C.x + p.axleForward * fwdX + p.axlePerp * perpX,
-    y: C.y + p.axleForward * fwdY + p.axlePerp * perpY,
-  };
-  const S: Point2D = {
-    x: C.x + p.shockMountForward * fwdX + p.shockMountPerp * perpX,
-    y: C.y + p.shockMountForward * fwdY + p.shockMountPerp * perpY,
+    x: C.x + p.axleForward * cosCA + p.axlePerp * (-sinCA),
+    y: C.y + p.axleForward * sinCA + p.axlePerp * cosCA,
   };
 
   return {
-    pivotA: A,
+    pivotA: p.pivotA,
     pivotB: p.pivotB,
     jointC: C,
     jointD: D,
