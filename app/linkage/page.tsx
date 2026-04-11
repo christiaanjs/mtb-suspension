@@ -6,9 +6,12 @@ import { LinkageInputPanel } from "@/components/linkage/LinkageInputPanel";
 import { LinkageDiagram } from "@/components/linkage/LinkageDiagram";
 import { Nav } from "@/components/Nav";
 
+type MobileTab = "inputs" | "diagram";
+
 export default function LinkagePage() {
   const { geometry, updateGeometry, analysisResults, isCalculating } = useLinkageViewModel();
   const [travelPercent, setTravelPercent] = useState(0);
+  const [mobileTab, setMobileTab] = useState<MobileTab>("diagram");
 
   const lastState = analysisResults.states[analysisResults.states.length - 1];
   const leverageRatioAtIdx = Math.round(
@@ -19,10 +22,10 @@ export default function LinkagePage() {
   ];
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-gray-50 dark:bg-black overflow-hidden">
+    <div className="flex flex-col min-h-screen lg:h-screen w-screen bg-gray-50 dark:bg-black lg:overflow-hidden">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center gap-4 flex-shrink-0">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-3 py-3 lg:px-4 flex items-center gap-2 lg:gap-4 flex-shrink-0">
+        <h1 className="text-lg lg:text-xl font-bold text-gray-900 dark:text-white">
           Linkage Explorer
         </h1>
         <Nav />
@@ -31,10 +34,36 @@ export default function LinkagePage() {
         )}
       </header>
 
+      {/* Mobile tab bar — hidden on lg+ */}
+      <nav className="lg:hidden flex border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        {(
+          [
+            { id: "inputs", label: "Inputs" },
+            { id: "diagram", label: "Diagram" },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setMobileTab(tab.id)}
+            className={`flex-1 py-3 text-sm font-medium transition-colors border-b-2 ${
+              mobileTab === tab.id
+                ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+
       {/* Body */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 lg:overflow-hidden">
         {/* Left: inputs */}
-        <div className="w-72 border-r border-gray-200 dark:border-gray-800 overflow-hidden">
+        <div
+          className={`w-full lg:w-72 lg:border-r lg:border-gray-200 lg:dark:border-gray-800 lg:overflow-hidden lg:block ${
+            mobileTab === "inputs" ? "block" : "hidden"
+          }`}
+        >
           <LinkageInputPanel
             geometry={geometry}
             onGeometryChange={updateGeometry}
@@ -43,7 +72,11 @@ export default function LinkagePage() {
         </div>
 
         {/* Right: diagram + stats */}
-        <div className="flex-1 flex flex-col overflow-hidden p-4 gap-4">
+        <div
+          className={`flex-1 flex flex-col lg:overflow-hidden p-4 gap-4 lg:flex ${
+            mobileTab === "diagram" ? "flex" : "hidden"
+          }`}
+        >
           {/* Travel slider */}
           <div className="flex items-center gap-3 flex-shrink-0">
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300 w-20">
@@ -60,7 +93,7 @@ export default function LinkagePage() {
           </div>
 
           {/* Stats row */}
-          <div className="flex gap-6 text-sm flex-shrink-0">
+          <div className="flex flex-wrap gap-4 lg:gap-6 text-sm flex-shrink-0">
             <div>
               <span className="text-gray-500 dark:text-gray-400">Leverage Ratio: </span>
               <span className="font-mono font-medium text-gray-900 dark:text-white">
@@ -119,7 +152,7 @@ export default function LinkagePage() {
           </div>
 
           {/* Diagram */}
-          <div className="flex-1 overflow-hidden flex items-center justify-center">
+          <div className="flex-1 min-h-64 lg:min-h-0 overflow-hidden flex items-center justify-center">
             <LinkageDiagram
               geometry={geometry}
               results={analysisResults}
