@@ -1,7 +1,7 @@
 // MTB Suspension Analyzer Types
 // Ported from Swift app
 
-import { degreesToRadians } from "./geometry";
+import { degreesToRadians, circleCircleIntersection } from "./geometry";
 
 export interface Point2D {
   x: number;
@@ -272,6 +272,119 @@ export function createDefaultLinkageGeometry(): LinkageGeometry {
     shockStroke: 65,
     shockSpringRate: 60,
     rearWheelRadius: 375,
+  };
+}
+
+// Length-based parameterisation for the /linkage page.
+// Frame pivot positions (A, B, F) are still world-frame coordinates;
+// everything else is expressed as lengths and angles so the geometry is
+// always self-consistent.
+export interface LinkageLengthParams {
+  // Fixed frame positions (world frame, Y = height above ground)
+  pivotA: Point2D;          // Main frame pivot A
+  pivotB: Point2D;          // Horst link frame pivot B
+  shockFrameMount: Point2D; // Shock frame mount F
+
+  // Link lengths
+  armLength: number;        // |A–C|  (main arm)
+  crankAngleDeg: number;    // Angle of A→C at top-out, degrees from horizontal
+  couplerLength: number;    // |C–D|  (coupler link)
+  horstLength: number;      // |B–D|  (Horst link)
+
+  // Rear axle position on the coupler body, in the C→D local frame:
+  //   forward = along C→D direction; perp = 90° CCW from forward (typically negative = below)
+  axleForward: number;
+  axlePerp: number;
+
+  // Shock coupler mount on the coupler body, same frame as axle
+  shockMountForward: number;
+  shockMountPerp: number;
+
+  // Shock and wheel
+  shockETE: number;
+  shockStroke: number;
+  shockSpringRate: number;
+  rearWheelRadius: number;
+}
+
+// Default: parallelogram 4-bar (1:1 leverage ratio) that is guaranteed to produce
+// valid, monotone analysis results.
+// A=(0,540), B=(0,480), C0=(80,480), D0=(80,420), E=(240,375), S=(110,480), F=(110,690)
+export function createDefaultLinkageLengthParams(): LinkageLengthParams {
+  return {
+    pivotA: { x: 0, y: 540 },
+    pivotB: { x: 0, y: 480 },
+    shockFrameMount: { x: 110, y: 690 },
+    armLength: 100,
+    crankAngleDeg: -36.87, // atan2(-60, 80) — arm points backward-downward at top-out
+    couplerLength: 60,
+    horstLength: 100,
+    axleForward: 105,   // axle is 105 mm along the C→D direction from C
+    axlePerp: 160,      // axle is 160 mm to the left of (CCW from) the C→D direction
+    shockMountForward: 0,
+    shockMountPerp: 30,
+    shockETE: 210,
+    shockStroke: 65,
+    shockSpringRate: 60,
+    rearWheelRadius: 375,
+  };
+}
+
+// Convert length-based params to the coordinate-based LinkageGeometry expected
+// by the analysis engine.  The conversion is purely geometric and always produces
+// a valid (though possibly degenerate if link lengths violate the triangle
+// inequality) coordinate set.
+export function lengthParamsToCoordinates(p: LinkageLengthParams): LinkageGeometry {
+  const alpha0 = degreesToRadians(p.crankAngleDeg);
+  const A = p.pivotA;
+
+  // C = A + armLength * (cos α, sin α)
+  const C: Point2D = {
+    x: A.x + p.armLength * Math.cos(alpha0),
+    y: A.y + p.armLength * Math.sin(alpha0),
+  };
+
+  // D = one of the two intersections of circle(C, couplerLength) and circle(B, horstLength).
+  // Convention: pick the candidate with the lower Y value (D is always below C in a
+  // Horst-link design).  Falls back to a straight-down point when circles don't intersect.
+  const dCandidates = circleCircleIntersection(C, p.couplerLength, p.pivotB, p.horstLength);
+  let D: Point2D;
+  if (dCandidates.length === 0) {
+    D = { x: C.x, y: C.y - p.couplerLength };
+  } else if (dCandidates.length === 1) {
+    D = dCandidates[0];
+  } else {
+    D = dCandidates[0].y <= dCandidates[1].y ? dCandidates[0] : dCandidates[1];
+  }
+
+  // Coupler body frame at top-out: forward = C→D direction, perp = 90° CCW
+  const couplerAngle = Math.atan2(D.y - C.y, D.x - C.x);
+  const cosA = Math.cos(couplerAngle);
+  const sinA = Math.sin(couplerAngle);
+  const fwdX = cosA, fwdY = sinA;
+  const perpX = -sinA, perpY = cosA;
+
+  const E: Point2D = {
+    x: C.x + p.axleForward * fwdX + p.axlePerp * perpX,
+    y: C.y + p.axleForward * fwdY + p.axlePerp * perpY,
+  };
+  const S: Point2D = {
+    x: C.x + p.shockMountForward * fwdX + p.shockMountPerp * perpX,
+    y: C.y + p.shockMountForward * fwdY + p.shockMountPerp * perpY,
+  };
+
+  return {
+    pivotA: A,
+    pivotB: p.pivotB,
+    jointC: C,
+    jointD: D,
+    axleE: E,
+    shockFrameMount: p.shockFrameMount,
+    shockCouplerMount: S,
+    shockETE: p.shockETE,
+    shockStroke: p.shockStroke,
+    shockSpringRate: p.shockSpringRate,
+    rearWheelRadius: p.rearWheelRadius,
   };
 }
 

@@ -9,7 +9,7 @@ import { Nav } from "@/components/Nav";
 type MobileTab = "inputs" | "diagram";
 
 export default function LinkagePage() {
-  const { geometry, updateGeometry, analysisResults, isCalculating } = useLinkageViewModel();
+  const { params, updateParams, geometry, analysisResults, isCalculating } = useLinkageViewModel();
   const [travelPercent, setTravelPercent] = useState(0);
   const [mobileTab, setMobileTab] = useState<MobileTab>("diagram");
 
@@ -65,8 +65,8 @@ export default function LinkagePage() {
           }`}
         >
           <LinkageInputPanel
-            geometry={geometry}
-            onGeometryChange={updateGeometry}
+            params={params}
+            onParamsChange={updateParams}
             isCalculating={isCalculating}
           />
         </div>
