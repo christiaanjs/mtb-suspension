@@ -1,6 +1,7 @@
 # MTB Suspension Kinematics - Web app
 
 Deployed at [https://mtb-suspension-nine.vercel.app](https://mtb-suspension-nine.vercel.app)
+
 Based on [work by Pat Crowe-Rishworth](https://github.com/patcroris/MTB-suspension-App)
 
 ## Features
