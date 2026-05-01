@@ -519,3 +519,86 @@ describe("getRotatedCentreOfMass", () => {
   });
 });
 
+// ---- 4-bar / Horst link integration tests ----
+// Uses the same parallelogram geometry as fourBarKinematics.test.ts so results
+// are predictable: travelMM ≈ shock stroke (1:1 leverage ratio).
+function makeFourBarGeometry() {
+  return createDefaultGeometry({
+    overrides: {
+      suspensionType: "four-bar",
+      bbToPivotX: 0,
+      bbToPivotY: 210,
+      swingarmLength: 275,
+      bbToHorstFramePivotX: 0,
+      bbToHorstFramePivotY: 150,
+      horstArmLength: 100,
+      horstCrankAngleDeg: -36.87,
+      horstCouplerLength: 60,
+      horstLinkLength: 100,
+      horstShockMountForward: 0,
+      horstShockMountPerp: 30,
+      shockFrameMountX: 110,
+      shockFrameMountY: 360,
+      shockETE: 210,
+      shockStroke: 65,
+    },
+  });
+}
+
+describe("4-bar kinematics via runKinematicAnalysis", () => {
+  it("returns a non-empty result", () => {
+    const geometry = makeFourBarGeometry();
+    const results = runKinematicAnalysis(geometry);
+    expect(results.states.length).toBeGreaterThan(0);
+  });
+
+  it("first state has travelMM ≈ 0", () => {
+    const geometry = makeFourBarGeometry();
+    const results = runKinematicAnalysis(geometry);
+    expect(results.states[0].travelMM).toBeCloseTo(0, 1);
+  });
+
+  it("axle stays at rearWheelRadius throughout travel", () => {
+    const geometry = makeFourBarGeometry();
+    const results = runKinematicAnalysis(geometry);
+    for (const state of results.states) {
+      expect(state.rearAxle.world.y).toBeCloseTo(375, 1);
+    }
+  });
+
+  it("horstJointC and horstJointD are populated", () => {
+    const geometry = makeFourBarGeometry();
+    const results = runKinematicAnalysis(geometry);
+    const first = results.states[0];
+    expect(first.horstJointC).toBeDefined();
+    expect(first.horstJointD).toBeDefined();
+    expect(first.horstLinkPivotB).toBeDefined();
+  });
+
+  it("|A-C| link length is constant through travel", () => {
+    const geometry = makeFourBarGeometry();
+    const results = runKinematicAnalysis(geometry);
+    const refLenAC = distance(
+      results.states[0].pivot.world,
+      results.states[0].horstJointC!.world,
+    );
+    for (const state of results.states) {
+      const lenAC = distance(state.pivot.world, state.horstJointC!.world);
+      expect(lenAC).toBeCloseTo(refLenAC, 1);
+    }
+  });
+
+  it("|B-D| link length is constant through travel", () => {
+    const geometry = makeFourBarGeometry();
+    const results = runKinematicAnalysis(geometry);
+    const refLenBD = distance(
+      results.states[0].horstLinkPivotB!.world,
+      results.states[0].horstJointD!.world,
+    );
+    for (const state of results.states) {
+      const lenBD = distance(state.horstLinkPivotB!.world, state.horstJointD!.world);
+      expect(lenBD).toBeCloseTo(refLenBD, 1);
+    }
+  });
+});
+

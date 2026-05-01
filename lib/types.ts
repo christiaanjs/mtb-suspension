@@ -1,7 +1,7 @@
 // MTB Suspension Analyzer Types
 // Ported from Swift app
 
-import { degreesToRadians } from "./geometry";
+import { degreesToRadians, resolveCouplerFromLengths } from "./geometry";
 
 export interface Point2D {
   x: number;
@@ -47,6 +47,8 @@ export enum IdlerType {
   FrameMounted = "Frame Mounted",
   SwingarmMounted = "Swingarm Mounted",
 }
+
+export type SuspensionType = "single-pivot" | "four-bar";
 
 export interface BikeGeometry {
   // Frame - Primary Inputs
@@ -99,6 +101,23 @@ export interface BikeGeometry {
 
   // Frame Details
   seatTubeLength: number; // mm (vertical height)
+
+  // Suspension type (undefined = 'single-pivot' for backward compat)
+  suspensionType?: SuspensionType;
+
+  // 4-bar / Horst link parameters (used when suspensionType === 'four-bar')
+  // Frame pivot B is still given as a BB-relative coordinate (same convention as bbToPivotX/Y).
+  // C, D and S are derived from link lengths so the geometry is always self-consistent.
+  bbToHorstFramePivotX?: number; // Frame pivot B, X from BB
+  bbToHorstFramePivotY?: number; // Frame pivot B, Y from BB
+  horstArmLength?: number;       // |A–C| — main arm length
+  horstCrankAngleDeg?: number;   // Angle of A→C at top-out, degrees from horizontal
+  horstCouplerLength?: number;   // |C–D| — coupler link length
+  horstLinkLength?: number;      // |B–D| — Horst link length
+  // Shock coupler mount S in the C→D coupler body frame:
+  //   forward = along C→D; perp = 90° CCW (negative = below the arm)
+  horstShockMountForward?: number;
+  horstShockMountPerp?: number;
 }
 
 export function createDefaultGeometry({
@@ -138,6 +157,19 @@ export function createDefaultGeometry({
     forkTravel: 170.0,
     forkCompressionPercent: 0.0,
     seatTubeLength: 320.0,
+    suspensionType: "single-pivot",
+    // 4-bar defaults (ignored when single-pivot).
+    // With bbToPivotX=-80, bbToPivotY=210, bbHeight=330:
+    //   A=(-80,540), B=(-80,480), C=(0,480), D=(0,420), S=(30,610), F=(30,400)
+    //   |F-S|=210 = shockETE ✓
+    bbToHorstFramePivotX: -80.0,
+    bbToHorstFramePivotY: 150.0,
+    horstArmLength: 100.0,
+    horstCrankAngleDeg: -36.87,
+    horstCouplerLength: 60.0,
+    horstLinkLength: 100.0,
+    horstShockMountForward: -130.0,
+    horstShockMountPerp: 30.0,
     ...overrides,
   };
 }
@@ -160,6 +192,11 @@ export interface KinematicState {
   bb: KinematicPoint;
   pivot: KinematicPoint;
   swingarmEye: KinematicPoint;
+
+  // 4-bar / Horst link positions (undefined for single-pivot)
+  horstLinkPivotB?: KinematicPoint; // Secondary frame pivot B
+  horstJointC?: KinematicPoint;     // Coupler pivot C (connects to A)
+  horstJointD?: KinematicPoint;     // Coupler pivot D (connects to B)
 
   // Dynamics
   leverageRatio: number;
@@ -210,6 +247,128 @@ export enum GraphType {
 export interface BikeDesign {
   name: string;
   geometry: BikeGeometry;
+}
+
+// Standalone linkage geometry used by the /linkage page.
+// All positions are in world frame (Y measured from ground; Y=0 is ground level).
+export interface LinkageGeometry {
+  pivotA: Point2D;          // Main frame pivot (connects to coupler at C)
+  pivotB: Point2D;          // Horst link frame pivot (connects to coupler at D)
+  jointC: Point2D;          // Coupler pivot C at top-out (connects to A)
+  jointD: Point2D;          // Coupler pivot D at top-out (connects to B)
+  axleE: Point2D;           // Rear axle position at top-out
+  shockFrameMount: Point2D; // Shock frame-side mount
+  shockCouplerMount: Point2D; // Shock coupler-side mount at top-out
+  shockETE: number;         // Eye-to-eye at top-out (mm)
+  shockStroke: number;      // Total shock stroke (mm)
+  shockSpringRate: number;  // Spring rate (N/mm)
+  rearWheelRadius: number;  // mm
+}
+
+export function createDefaultLinkageGeometry(): LinkageGeometry {
+  // A plausible Horst-link layout in world frame (Y = height above ground)
+  return {
+    pivotA: { x: -80, y: 540 },        // Main pivot (near BB height)
+    pivotB: { x: 20, y: 480 },         // Horst link frame mount (lower, slightly forward)
+    jointC: { x: -80, y: 540 },        // C = A at top-out (for default: C coincides with A to start)
+    jointD: { x: 200, y: 370 },        // D near axle (Horst link coupler end)
+    axleE: { x: 360, y: 375 },         // Rear axle at top-out
+    shockFrameMount: { x: 30, y: 400 },
+    shockCouplerMount: { x: 60, y: 500 },
+    shockETE: 210,
+    shockStroke: 65,
+    shockSpringRate: 60,
+    rearWheelRadius: 375,
+  };
+}
+
+// Length-based parameterisation for the /linkage page.
+// Frame pivot positions (A, B, F) are still world-frame coordinates;
+// everything else is expressed as lengths and angles so the geometry is
+// always self-consistent.
+export interface LinkageLengthParams {
+  // Fixed frame positions (world frame, Y = height above ground)
+  pivotA: Point2D;          // Main frame pivot A
+  pivotB: Point2D;          // Horst link frame pivot B
+  shockFrameMount: Point2D; // Shock frame mount F
+
+  // Link lengths
+  armLength: number;        // |A–C|  (main arm)
+  crankAngleDeg: number;    // Angle of A→C at top-out, degrees from horizontal
+  couplerLength: number;    // |C–D|  (coupler link)
+  horstLength: number;      // |B–D|  (Horst link)
+
+  // Rear axle position on the coupler body, in the C→D local frame:
+  //   forward = along C→D direction; perp = 90° CCW from forward (typically negative = below)
+  axleForward: number;
+  axlePerp: number;
+
+  // Shock coupler mount on the coupler body, same frame as axle
+  shockMountForward: number;
+  shockMountPerp: number;
+
+  // Shock and wheel
+  shockETE: number;
+  shockStroke: number;
+  shockSpringRate: number;
+  rearWheelRadius: number;
+}
+
+// Default: parallelogram 4-bar (1:1 leverage ratio) that is guaranteed to produce
+// valid, monotone analysis results.
+// A=(0,540), B=(0,480), C0=(80,480), D0=(80,420), E=(240,375), S=(110,480), F=(110,690)
+export function createDefaultLinkageLengthParams(): LinkageLengthParams {
+  return {
+    pivotA: { x: 0, y: 540 },
+    pivotB: { x: 0, y: 480 },
+    shockFrameMount: { x: 110, y: 690 },
+    armLength: 100,
+    crankAngleDeg: -36.87, // atan2(-60, 80) — arm points backward-downward at top-out
+    couplerLength: 60,
+    horstLength: 100,
+    axleForward: 105,   // axle is 105 mm along the C→D direction from C
+    axlePerp: 160,      // axle is 160 mm to the left of (CCW from) the C→D direction
+    shockMountForward: 0,
+    shockMountPerp: 30,
+    shockETE: 210,
+    shockStroke: 65,
+    shockSpringRate: 60,
+    rearWheelRadius: 375,
+  };
+}
+
+// Convert length-based params to the coordinate-based LinkageGeometry expected
+// by the analysis engine.  The conversion is purely geometric and always produces
+// a valid (though possibly degenerate if link lengths violate the triangle
+// inequality) coordinate set.
+export function lengthParamsToCoordinates(p: LinkageLengthParams): LinkageGeometry {
+  const { C, D, S } = resolveCouplerFromLengths(
+    p.pivotA, p.armLength, p.crankAngleDeg,
+    p.pivotB, p.couplerLength, p.horstLength,
+    p.shockMountForward, p.shockMountPerp,
+  );
+
+  // Axle uses its own coupler-body offsets (axleForward / axlePerp)
+  const couplerAngle = Math.atan2(D.y - C.y, D.x - C.x);
+  const cosCA = Math.cos(couplerAngle), sinCA = Math.sin(couplerAngle);
+  const E: Point2D = {
+    x: C.x + p.axleForward * cosCA + p.axlePerp * (-sinCA),
+    y: C.y + p.axleForward * sinCA + p.axlePerp * cosCA,
+  };
+
+  return {
+    pivotA: p.pivotA,
+    pivotB: p.pivotB,
+    jointC: C,
+    jointD: D,
+    axleE: E,
+    shockFrameMount: p.shockFrameMount,
+    shockCouplerMount: S,
+    shockETE: p.shockETE,
+    shockStroke: p.shockStroke,
+    shockSpringRate: p.shockSpringRate,
+    rearWheelRadius: p.rearWheelRadius,
+  };
 }
 
 export const computedProperties = {

@@ -8,6 +8,7 @@ import { GraphPanel } from "@/components/Graphs";
 import { Attribution } from "@/components/Attribution";
 import { runKinematicAnalysis } from "@/lib/kinematics";
 import { AnalysisResults } from "@/lib/types";
+import { Nav } from "@/components/Nav";
 
 type MobileTab = "inputs" | "bike" | "analysis";
 
@@ -68,6 +69,7 @@ export default function Home() {
             <h1 className="text-lg lg:text-2xl font-bold text-gray-900 dark:text-white truncate">
               MTB Suspension Analyzer
             </h1>
+            <Nav />
             <input
               type="text"
               value={viewModel.bikeName}

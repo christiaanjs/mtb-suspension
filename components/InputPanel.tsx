@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { BikeGeometry, IdlerType } from "@/lib/types";
+import { BikeGeometry, IdlerType, SuspensionType } from "@/lib/types";
 
 interface InputFieldProps {
   label: string;
@@ -181,6 +181,18 @@ export function InputPanel({
         {/* Suspension */}
         <InputSection title="Suspension">
           <InputField
+            label="Type"
+            value={geometry.suspensionType ?? "single-pivot"}
+            onChange={(val) =>
+              onGeometryChange({ suspensionType: val as SuspensionType })
+            }
+            type="select"
+            options={[
+              { value: "single-pivot", label: "Single Pivot" },
+              { value: "four-bar", label: "4-Bar / Horst Link" },
+            ]}
+          />
+          <InputField
             label="Swingarm Length (mm)"
             value={geometry.swingarmLength}
             onChange={(val) =>
@@ -204,6 +216,87 @@ export function InputPanel({
               onGeometryChange({ rearWheelDiameter: val as number })
             }
           />
+          {geometry.suspensionType === "four-bar" && (
+            <>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Horst Link Frame Pivot B (from BB):
+              </p>
+              <InputField
+                label="  B X (mm)"
+                value={geometry.bbToHorstFramePivotX ?? 0}
+                onChange={(val) =>
+                  onGeometryChange({ bbToHorstFramePivotX: val as number })
+                }
+                className="ml-2"
+              />
+              <InputField
+                label="  B Y (mm)"
+                value={geometry.bbToHorstFramePivotY ?? 0}
+                onChange={(val) =>
+                  onGeometryChange({ bbToHorstFramePivotY: val as number })
+                }
+                className="ml-2"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Link lengths:
+              </p>
+              <InputField
+                label="  Main Arm A–C (mm)"
+                value={geometry.horstArmLength ?? 100}
+                onChange={(val) =>
+                  onGeometryChange({ horstArmLength: val as number })
+                }
+                min={1}
+                className="ml-2"
+              />
+              <InputField
+                label="  Arm Angle at Top-out (°)"
+                value={geometry.horstCrankAngleDeg ?? 0}
+                onChange={(val) =>
+                  onGeometryChange({ horstCrankAngleDeg: val as number })
+                }
+                step={0.5}
+                className="ml-2"
+              />
+              <InputField
+                label="  Coupler C–D (mm)"
+                value={geometry.horstCouplerLength ?? 60}
+                onChange={(val) =>
+                  onGeometryChange({ horstCouplerLength: val as number })
+                }
+                min={1}
+                className="ml-2"
+              />
+              <InputField
+                label="  Horst Link B–D (mm)"
+                value={geometry.horstLinkLength ?? 100}
+                onChange={(val) =>
+                  onGeometryChange({ horstLinkLength: val as number })
+                }
+                min={1}
+                className="ml-2"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Shock coupler mount S (on coupler body, C→D frame):
+              </p>
+              <InputField
+                label="  Along arm (mm)"
+                value={geometry.horstShockMountForward ?? 0}
+                onChange={(val) =>
+                  onGeometryChange({ horstShockMountForward: val as number })
+                }
+                className="ml-2"
+              />
+              <InputField
+                label="  Off arm (mm)"
+                value={geometry.horstShockMountPerp ?? 30}
+                onChange={(val) =>
+                  onGeometryChange({ horstShockMountPerp: val as number })
+                }
+                className="ml-2"
+              />
+            </>
+          )}
         </InputSection>
 
         {/* Shock */}
@@ -244,17 +337,21 @@ export function InputPanel({
             }
             className="ml-2"
           />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            Swingarm Mount:
-          </p>
-          <InputField
-            label="  Distance from pivot (mm)"
-            value={geometry.shockSwingarmMountDistance}
-            onChange={(val) =>
-              onGeometryChange({ shockSwingarmMountDistance: val as number })
-            }
-            className="ml-2"
-          />
+          {geometry.suspensionType !== "four-bar" && (
+            <>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Swingarm Mount:
+              </p>
+              <InputField
+                label="  Distance from pivot (mm)"
+                value={geometry.shockSwingarmMountDistance}
+                onChange={(val) =>
+                  onGeometryChange({ shockSwingarmMountDistance: val as number })
+                }
+                className="ml-2"
+              />
+            </>
+          )}
         </InputSection>
 
         {/* Drivetrain */}
