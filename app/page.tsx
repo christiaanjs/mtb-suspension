@@ -83,7 +83,9 @@ export default function Home() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>("bike");
 
-  // Fork / shock coupling state (lifted so GraphPanel can receive fork-aware results)
+  // Suspension position state (lifted so the graphs can track the animation
+  // and slider position, and so GraphPanel can receive fork-aware results)
+  const [shockPercent, setShockPercent] = useState(0);
   const [forkCompressionPercent, setForkCompressionPercent] = useState(0);
   const [coupled, setCoupled] = useState(true);
   // Only stores the uncoupled (fixed-fork) analysis; null means "not yet computed".
@@ -115,16 +117,6 @@ export default function Home() {
       viewModel.loadFromFile(file);
     }
   };
-
-  const travelPercentage = viewModel.analysisResults.states[
-    viewModel.analysisResults.states.length - 1
-  ]?.travelMM
-    ? (viewModel.currentTravelMM /
-        viewModel.analysisResults.states[
-          viewModel.analysisResults.states.length - 1
-        ].travelMM) *
-      100
-    : 0;
 
   const mobileTabs = [
     { id: "inputs", label: "Inputs", icon: SlidersIcon },
@@ -227,11 +219,12 @@ export default function Home() {
             <AnimationView
               geometry={viewModel.geometry}
               analysisResults={viewModel.analysisResults}
-              initialTravelPercentage={viewModel.currentTravelMM}
               isAnimating={isAnimating}
               animationSpeed={viewModel.animationSpeed}
               selectedGraph={viewModel.selectedGraph}
               showCalculations={true}
+              shockPercent={shockPercent}
+              onShockPercentChange={setShockPercent}
               forkCompressionPercent={forkCompressionPercent}
               coupled={coupled}
               onForkCompressionChange={setForkCompressionPercent}
@@ -251,7 +244,7 @@ export default function Home() {
               results={graphResults}
               selectedGraph={viewModel.selectedGraph}
               onGraphChange={viewModel.setSelectedGraph}
-              travelPercentage={travelPercentage}
+              travelPercentage={shockPercent}
             />
           </div>
         </div>

@@ -202,46 +202,60 @@ function SliderRow({
 }
 
 type AnimationViewProps = Omit<VisualizationProps, "travelPercentage" | "forkCompressionPercent"> & {
-  initialTravelPercentage: number;
   isAnimating: boolean;
   animationSpeed: number;
+  /** Controlled: current shock compression percentage (0-100) */
+  shockPercent: number;
   /** Controlled: current fork compression percentage (0-100) */
   forkCompressionPercent: number;
   /** Controlled: whether fork and shock move together */
   coupled: boolean;
+  onShockPercentChange: (percent: number) => void;
   onForkCompressionChange: (percent: number) => void;
   onCoupledChange: (coupled: boolean) => void;
 };
 
 export function AnimationView({
-  initialTravelPercentage,
   isAnimating,
   animationSpeed,
+  shockPercent,
   forkCompressionPercent,
   coupled,
+  onShockPercentChange,
   onForkCompressionChange,
   onCoupledChange,
   showCalculations: initialShowCalculations = true,
   ...props
 }: AnimationViewProps) {
   const axlePath = props.analysisResults.axlePath;
-  // Shock position is kept local — it drives animation independently of fork
-  const [shockPercent, setShockPercent] = React.useState(initialTravelPercentage);
   const [showWorkingLines, setShowWorkingLines] = React.useState(initialShowCalculations);
+
+  // Mirror the controlled value so the animation interval doesn't need to be
+  // torn down and recreated on every tick.
+  const shockPercentRef = React.useRef(shockPercent);
+  React.useEffect(() => {
+    shockPercentRef.current = shockPercent;
+  }, [shockPercent]);
 
   React.useEffect(() => {
     if (!isAnimating) return;
     const interval = setInterval(() => {
-      setShockPercent((prev) => {
-        const next = prev + 0.5 * animationSpeed;
-        return next > 100 ? 0 : next;
-      });
+      const next = shockPercentRef.current + 0.5 * animationSpeed;
+      const value = next > 100 ? 0 : next;
+      onShockPercentChange(value);
+      if (coupled) onForkCompressionChange(value);
     }, 50);
     return () => clearInterval(interval);
-  }, [isAnimating, animationSpeed]);
+  }, [
+    isAnimating,
+    animationSpeed,
+    coupled,
+    onShockPercentChange,
+    onForkCompressionChange,
+  ]);
 
   const handleShockChange = (value: number) => {
-    setShockPercent(value);
+    onShockPercentChange(value);
     if (coupled) onForkCompressionChange(value);
   };
 
