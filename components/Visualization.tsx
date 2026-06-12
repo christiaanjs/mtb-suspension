@@ -72,7 +72,7 @@ export function BikeVisualization({
 
   // Calculate canvas bounds
   const padding = 50;
-  const scale = 0.275; // pixels per mm
+  const scale = 0.275; // internal viewBox units per mm
   const minX = rearAxleWorld.x - geometry.rearWheelDiameter;
   const maxX = frontAxleWorld.x + geometry.frontWheelDiameter;
   const minY = 0;
@@ -99,11 +99,11 @@ export function BikeVisualization({
   };
 
   return (
-    <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-black overflow-auto">
+    <div className="w-full h-full flex items-center justify-center bg-gray-50 dark:bg-gray-950 overflow-hidden p-3 lg:p-4">
       <svg
-        width={width}
-        height={height}
-        className="border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 rounded"
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio="xMidYMid meet"
+        className="w-full h-full rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm"
       >
         {/* Grid */}
         <defs>
@@ -116,7 +116,7 @@ export function BikeVisualization({
             <path
               d={`M ${50 * scale} 0 L 0 0 0 ${50 * scale}`}
               fill="none"
-              stroke="#e5e7eb"
+              stroke="#9ca3af"
               strokeWidth="0.5"
               opacity="0.3"
             />
@@ -140,6 +140,63 @@ export function BikeVisualization({
           <Calculations {...drawProps} selectedGraph={selectedGraph} />
         )}
       </svg>
+    </div>
+  );
+}
+
+function ToggleSwitch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-[13px] text-gray-600 dark:text-gray-300 cursor-pointer select-none">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="sr-only peer"
+      />
+      <span className="relative h-5 w-9 flex-shrink-0 rounded-full bg-gray-300 dark:bg-gray-700 transition-colors peer-checked:bg-blue-600 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/60 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-4" />
+      {label}
+    </label>
+  );
+}
+
+function SliderRow({
+  label,
+  value,
+  onChange,
+  disabled = false,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-11 flex-shrink-0 text-right text-xs font-medium text-gray-500 dark:text-gray-400">
+        {label}
+      </span>
+      <input
+        type="range"
+        min="0"
+        max="100"
+        step="0.5"
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        style={{ "--p": `${value}%` } as React.CSSProperties}
+        className="slider flex-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+      />
+      <span className="w-14 flex-shrink-0 text-right font-mono text-xs text-gray-600 dark:text-gray-300 tabular-nums">
+        {value.toFixed(1)}%
+      </span>
     </div>
   );
 }
@@ -201,79 +258,46 @@ export function AnimationView({
   const effectiveForkPercent = coupled ? shockPercent : forkCompressionPercent;
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 dark:bg-black">
-      <BikeVisualization
-        travelPercentage={shockPercent}
-        forkCompressionPercent={effectiveForkPercent}
-        {...props}
-        axlePath={axlePath}
-        showCalculations={showWorkingLines}
-      />
-      <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+    <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-950">
+      <div className="flex-1 min-h-0">
+        <BikeVisualization
+          travelPercentage={shockPercent}
+          forkCompressionPercent={effectiveForkPercent}
+          {...props}
+          axlePath={axlePath}
+          showCalculations={showWorkingLines}
+        />
+      </div>
+      <div className="px-4 py-3 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 space-y-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
             Compression
           </span>
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={showWorkingLines}
-                onChange={(e) => setShowWorkingLines(e.target.checked)}
-                className="w-4 h-4"
-              />
-              Working lines
-            </label>
-            <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={coupled}
-                onChange={(e) => handleCoupledChange(e.target.checked)}
-                className="w-4 h-4"
-              />
-              Couple fork &amp; shock
-            </label>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <ToggleSwitch
+              checked={showWorkingLines}
+              onChange={setShowWorkingLines}
+              label="Working lines"
+            />
+            <ToggleSwitch
+              checked={coupled}
+              onChange={handleCoupledChange}
+              label="Couple fork & shock"
+            />
           </div>
         </div>
 
-        {/* Shock slider */}
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 w-10 text-right">
-            Shock
-          </span>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="0.5"
-            value={shockPercent}
-            onChange={(e) => handleShockChange(parseFloat(e.target.value))}
-            className="flex-1 h-2 bg-gray-300 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
-          />
-          <span className="text-sm font-mono text-gray-600 dark:text-gray-400 w-12 text-right">
-            {shockPercent.toFixed(1)}%
-          </span>
-        </div>
-
-        {/* Fork slider */}
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 w-10 text-right">
-            Fork
-          </span>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="0.5"
-            value={forkCompressionPercent}
-            onChange={(e) => onForkCompressionChange(parseFloat(e.target.value))}
-            disabled={coupled}
-            className="flex-1 h-2 bg-gray-300 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-          />
-          <span className="text-sm font-mono text-gray-600 dark:text-gray-400 w-12 text-right">
-            {forkCompressionPercent.toFixed(1)}%
-          </span>
-        </div>
+        <SliderRow
+          label="Shock"
+          value={shockPercent}
+          onChange={handleShockChange}
+        />
+        <SliderRow
+          label="Fork"
+          value={forkCompressionPercent}
+          onChange={onForkCompressionChange}
+          disabled={coupled}
+        />
       </div>
     </div>
   );
