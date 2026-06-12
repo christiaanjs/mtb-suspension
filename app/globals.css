@@ -3,6 +3,8 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --slider-fill: #2563eb;
+  --slider-track: #e5e7eb;
 }
 
 @theme inline {
@@ -16,14 +18,14 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --slider-fill: #3b82f6;
+    --slider-track: #374151;
   }
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* Note: no global `* { margin/padding: 0 }` reset here — Tailwind v4's
+   preflight already handles it, and an un-layered reset would override
+   every layered padding/margin utility. */
 
 html,
 body {
@@ -41,12 +43,57 @@ body {
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Smooth inputs for number fields */
-input[type="range"] {
-  -webkit-appearance: slider-horizontal;
+/* Range sliders — filled track driven by the --p custom property */
+input[type="range"].slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+}
+
+input[type="range"].slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--slider-fill) var(--p, 0%),
+    var(--slider-track) var(--p, 0%)
+  );
+}
+
+input[type="range"].slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -6px;
+  height: 18px;
+  width: 18px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid var(--slider-fill);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+}
+
+input[type="range"].slider::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--slider-fill) var(--p, 0%),
+    var(--slider-track) var(--p, 0%)
+  );
+}
+
+input[type="range"].slider::-moz-range-thumb {
+  height: 18px;
+  width: 18px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid var(--slider-fill);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
 }
 
 input::-webkit-outer-spin-button,
@@ -57,4 +104,31 @@ input::-webkit-inner-spin-button {
 
 input[type="number"] {
   -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Thin scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(0 0 0 / 0.2);
+  border-radius: 9999px;
+}
+
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb {
+    background: rgb(255 255 255 / 0.2);
+  }
+}
+
+/* Hide scrollbar but keep scrollability (horizontal pill rows) */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }

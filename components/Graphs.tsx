@@ -15,6 +15,9 @@ const SVG_PADDING = 40;
 const PLOT_WIDTH = SVG_WIDTH - SVG_PADDING * 2;
 const PLOT_HEIGHT = SVG_HEIGHT - SVG_PADDING * 2;
 
+const LINE_COLOR = "#3b82f6";
+const MARKER_COLOR = "#ef4444";
+
 function getGraphData(
   results: AnalysisResults,
   graphType: string,
@@ -95,6 +98,42 @@ function getGraphData(
   }
 }
 
+function currentIndexFor(travelPercentage: number, length: number) {
+  return Math.max(
+    0,
+    Math.min(Math.round((travelPercentage / 100) * (length - 1)), length - 1),
+  );
+}
+
+function GraphHeader({
+  title,
+  unit,
+  currentValue,
+}: {
+  title: string;
+  unit: string;
+  currentValue?: number;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+        {title}
+        {unit && unit !== "ratio" && (
+          <span className="ml-1.5 font-normal text-gray-400 dark:text-gray-500">
+            ({unit})
+          </span>
+        )}
+      </h3>
+      {currentValue !== undefined && Number.isFinite(currentValue) && (
+        <span className="flex-shrink-0 rounded-md bg-blue-50 dark:bg-blue-950/60 px-2 py-1 font-mono text-xs font-medium text-blue-700 dark:text-blue-300 tabular-nums">
+          {currentValue.toFixed(2)}
+          {unit && unit !== "ratio" ? ` ${unit}` : ""}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function GridAndAxes() {
   return (
     <>
@@ -110,10 +149,14 @@ function GridAndAxes() {
           <path
             d={`M ${PLOT_WIDTH / 10} 0 L 0 0 0 ${PLOT_HEIGHT / 5}`}
             fill="none"
-            stroke="#e5e7eb"
+            stroke="#9ca3af"
             strokeWidth="0.5"
           />
         </pattern>
+        <linearGradient id="graphArea" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={LINE_COLOR} stopOpacity="0.25" />
+          <stop offset="100%" stopColor={LINE_COLOR} stopOpacity="0.02" />
+        </linearGradient>
       </defs>
       <rect
         x={SVG_PADDING}
@@ -121,25 +164,52 @@ function GridAndAxes() {
         width={PLOT_WIDTH}
         height={PLOT_HEIGHT}
         fill="url(#gridMinor)"
-        opacity="0.3"
+        opacity="0.35"
       />
       <line
         x1={SVG_PADDING}
         y1={SVG_HEIGHT - SVG_PADDING}
         x2={SVG_WIDTH - SVG_PADDING}
         y2={SVG_HEIGHT - SVG_PADDING}
-        stroke="#333"
-        strokeWidth="2"
+        stroke="#9ca3af"
+        strokeWidth="1.5"
+        className="dark:stroke-gray-600"
       />
       <line
         x1={SVG_PADDING}
         y1={SVG_PADDING}
         x2={SVG_PADDING}
         y2={SVG_HEIGHT - SVG_PADDING}
-        stroke="#333"
-        strokeWidth="2"
+        stroke="#9ca3af"
+        strokeWidth="1.5"
+        className="dark:stroke-gray-600"
       />
     </>
+  );
+}
+
+function AxisTickLabel({
+  x,
+  y,
+  anchor,
+  children,
+}: {
+  x: number;
+  y: number;
+  anchor: "middle" | "end";
+  children: React.ReactNode;
+}) {
+  return (
+    <text
+      x={x}
+      y={y}
+      fontSize="12"
+      textAnchor={anchor}
+      fill="#6b7280"
+      className="dark:fill-gray-400"
+    >
+      {children}
+    </text>
   );
 }
 
@@ -175,28 +245,18 @@ function AxlePathGraph({
     .join(" ");
 
   // Current position dot
-  const currentIndex = Math.max(
-    0,
-    Math.min(
-      Math.round((travelPercentage / 100) * (axlePath.length - 1)),
-      axlePath.length - 1,
-    ),
-  );
+  const currentIndex = currentIndexFor(travelPercentage, axlePath.length);
   const dotX = scaleX(xData[currentIndex]);
   const dotY = scaleY(yData[currentIndex]);
 
   return (
     <div className="w-full h-full flex flex-col bg-white dark:bg-gray-950">
-      <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">
-          Wheel Path (mm)
-        </h3>
-      </div>
-      <div className="flex-1 overflow-hidden flex items-center justify-center p-4">
+      <GraphHeader title="Wheel Path" unit="mm" />
+      <div className="flex-1 overflow-hidden flex items-center justify-center p-3 lg:p-4">
         <svg
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
           width="100%"
-          className="border border-gray-300 dark:border-gray-700 rounded"
+          className="max-h-full"
         >
           <GridAndAxes />
 
@@ -211,19 +271,17 @@ function AxlePathGraph({
                   y1={SVG_HEIGHT - SVG_PADDING}
                   x2={x}
                   y2={SVG_HEIGHT - SVG_PADDING + 5}
-                  stroke="#333"
+                  stroke="#9ca3af"
                   strokeWidth="1"
+                  className="dark:stroke-gray-600"
                 />
-                <text
+                <AxisTickLabel
                   x={x}
                   y={SVG_HEIGHT - SVG_PADDING + 20}
-                  fontSize="12"
-                  textAnchor="middle"
-                  fill="#666"
-                  className="dark:fill-gray-400"
+                  anchor="middle"
                 >
                   {val.toFixed(0)}
-                </text>
+                </AxisTickLabel>
               </g>
             );
           })}
@@ -239,19 +297,13 @@ function AxlePathGraph({
                   y1={y}
                   x2={SVG_PADDING}
                   y2={y}
-                  stroke="#333"
+                  stroke="#9ca3af"
                   strokeWidth="1"
+                  className="dark:stroke-gray-600"
                 />
-                <text
-                  x={SVG_PADDING - 10}
-                  y={y + 4}
-                  fontSize="12"
-                  textAnchor="end"
-                  fill="#666"
-                  className="dark:fill-gray-400"
-                >
+                <AxisTickLabel x={SVG_PADDING - 10} y={y + 4} anchor="end">
                   {val.toFixed(0)}
-                </text>
+                </AxisTickLabel>
               </g>
             );
           })}
@@ -260,8 +312,10 @@ function AxlePathGraph({
           <polyline
             points={pathString}
             fill="none"
-            stroke="#3b82f6"
-            strokeWidth="2"
+            stroke={LINE_COLOR}
+            strokeWidth="2.5"
+            strokeLinejoin="round"
+            strokeLinecap="round"
           />
 
           {/* Current position dot */}
@@ -269,18 +323,20 @@ function AxlePathGraph({
             cx={dotX}
             cy={dotY}
             r={5}
-            fill="#ef4444"
-            opacity="0.85"
+            fill={MARKER_COLOR}
+            stroke="#ffffff"
+            strokeWidth="1.5"
+            opacity="0.9"
           />
 
           {/* Axis labels */}
           <text
             x={SVG_WIDTH / 2}
             y={SVG_HEIGHT - 5}
-            fontSize="14"
-            fontWeight="bold"
+            fontSize="13"
+            fontWeight="600"
             textAnchor="middle"
-            fill="#333"
+            fill="#4b5563"
             className="dark:fill-gray-300"
           >
             Rearward from BB (mm)
@@ -290,7 +346,7 @@ function AxlePathGraph({
             y={SVG_HEIGHT / 2}
             fontSize="12"
             textAnchor="middle"
-            fill="#333"
+            fill="#4b5563"
             className="dark:fill-gray-300"
             transform={`rotate(-90, 12, ${SVG_HEIGHT / 2})`}
           >
@@ -309,7 +365,7 @@ export function Graph({
 }: GraphProps) {
   if (results.states.length === 0) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+      <div className="w-full h-full flex items-center justify-center bg-white dark:bg-gray-950">
         <p className="text-gray-500 dark:text-gray-400">No data available</p>
       </div>
     );
@@ -338,23 +394,25 @@ export function Graph({
   // Find current position
   const currentTravel = (travelPercentage / 100) * xMax;
   const currentX = scaleX(currentTravel);
+  const currentIndex = currentIndexFor(travelPercentage, yData.length);
+  const currentValue = yData[currentIndex];
 
   // Build path
   const pathPoints = yData.map((y, i) => `${scaleX(xData[i])},${scaleY(y)}`);
   const pathString = pathPoints.join(" ");
 
+  // Closed polygon for the gradient area fill under the curve
+  const baseline = SVG_HEIGHT - SVG_PADDING;
+  const areaString = `${pathString} ${scaleX(xData[xData.length - 1])},${baseline} ${scaleX(xData[0])},${baseline}`;
+
   return (
     <div className="w-full h-full flex flex-col bg-white dark:bg-gray-950">
-      <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">
-          {label} ({unit})
-        </h3>
-      </div>
-      <div className="flex-1 overflow-hidden flex items-center justify-center p-4">
+      <GraphHeader title={label} unit={unit} currentValue={currentValue} />
+      <div className="flex-1 overflow-hidden flex items-center justify-center p-3 lg:p-4">
         <svg
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
           width="100%"
-          className="border border-gray-300 dark:border-gray-700 rounded"
+          className="max-h-full"
         >
           <GridAndAxes />
 
@@ -369,19 +427,17 @@ export function Graph({
                   y1={SVG_HEIGHT - SVG_PADDING}
                   x2={x}
                   y2={SVG_HEIGHT - SVG_PADDING + 5}
-                  stroke="#333"
+                  stroke="#9ca3af"
                   strokeWidth="1"
+                  className="dark:stroke-gray-600"
                 />
-                <text
+                <AxisTickLabel
                   x={x}
                   y={SVG_HEIGHT - SVG_PADDING + 20}
-                  fontSize="12"
-                  textAnchor="middle"
-                  fill="#666"
-                  className="dark:fill-gray-400"
+                  anchor="middle"
                 >
                   {val.toFixed(0)}
-                </text>
+                </AxisTickLabel>
               </g>
             );
           })}
@@ -397,29 +453,28 @@ export function Graph({
                   y1={y}
                   x2={SVG_PADDING}
                   y2={y}
-                  stroke="#333"
+                  stroke="#9ca3af"
                   strokeWidth="1"
+                  className="dark:stroke-gray-600"
                 />
-                <text
-                  x={SVG_PADDING - 10}
-                  y={y + 4}
-                  fontSize="12"
-                  textAnchor="end"
-                  fill="#666"
-                  className="dark:fill-gray-400"
-                >
+                <AxisTickLabel x={SVG_PADDING - 10} y={y + 4} anchor="end">
                   {val.toFixed(1)}
-                </text>
+                </AxisTickLabel>
               </g>
             );
           })}
+
+          {/* Area fill under the curve */}
+          <polygon points={areaString} fill="url(#graphArea)" />
 
           {/* Data line */}
           <polyline
             points={pathString}
             fill="none"
-            stroke="#3b82f6"
-            strokeWidth="2"
+            stroke={LINE_COLOR}
+            strokeWidth="2.5"
+            strokeLinejoin="round"
+            strokeLinecap="round"
           />
 
           {/* Current position indicator */}
@@ -428,20 +483,29 @@ export function Graph({
             y1={SVG_PADDING}
             x2={currentX}
             y2={SVG_HEIGHT - SVG_PADDING}
-            stroke="#ef4444"
-            strokeWidth="2"
+            stroke={MARKER_COLOR}
+            strokeWidth="1.5"
             strokeDasharray="5,5"
             opacity="0.7"
+          />
+          <circle
+            cx={scaleX(xData[currentIndex])}
+            cy={scaleY(currentValue)}
+            r={5}
+            fill={MARKER_COLOR}
+            stroke="#ffffff"
+            strokeWidth="1.5"
+            opacity="0.9"
           />
 
           {/* X axis label */}
           <text
             x={SVG_WIDTH / 2}
             y={SVG_HEIGHT - 5}
-            fontSize="14"
-            fontWeight="bold"
+            fontSize="13"
+            fontWeight="600"
             textAnchor="middle"
-            fill="#333"
+            fill="#4b5563"
             className="dark:fill-gray-300"
           >
             Travel (mm)
@@ -479,23 +543,25 @@ export function GraphPanel({
   ];
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 dark:bg-black">
-      <div className="p-3 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex gap-2 flex-wrap">
-        {graphs.map((graph) => (
-          <button
-            key={graph.value}
-            onClick={() => onGraphChange(graph.value)}
-            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-              selectedGraph === graph.value
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700"
-            }`}
-          >
-            {graph.label}
-          </button>
-        ))}
+    <div className="flex flex-col h-full bg-white dark:bg-gray-950">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-none px-3 py-2.5 lg:flex-wrap">
+          {graphs.map((graph) => (
+            <button
+              key={graph.value}
+              onClick={() => onGraphChange(graph.value)}
+              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                selectedGraph === graph.value
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+              }`}
+            >
+              {graph.label}
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 min-h-0 overflow-auto">
         <Graph
           results={results}
           selectedGraph={selectedGraph}
