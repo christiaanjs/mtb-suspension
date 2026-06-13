@@ -10,7 +10,14 @@ import {
   Circle,
   IdlerType,
   LineSegment,
+  SuspensionType,
 } from "./types";
+import {
+  establishFourBar,
+  solveFourBarAtStroke,
+  initialTracker,
+  FourBarTracker,
+} from "./fourbar";
 import {
   distance,
   angle,
@@ -37,10 +44,17 @@ interface FirstPassState {
   travelMM: number;
   rearAxlePosition: Point2D;
   bbPosition: Point2D;
-  pivotPosition: Point2D;
-  swingarmEyePosition: Point2D;
+  pivotPosition: Point2D; // single pivot: physical pivot; four-bar: instant centre
+  swingarmEyePosition: Point2D; // single pivot: shock eye on swingarm; four-bar: shock eye on rocker
   shockLength: number;
   proportionalForkStroke: number;
+  // Extra linkage points for four-bar bikes (world frame), null otherwise.
+  fourBar: {
+    mainPivot: Point2D;
+    rockerPivot: Point2D;
+    seatstayLower: Point2D;
+    seatstayUpper: Point2D;
+  } | null;
 }
 
 /**
@@ -56,7 +70,12 @@ export function runKinematicAnalysis(
   geometry: BikeGeometry,
   fixedForkCompressionMM?: number,
 ): AnalysisResults {
-  const rigidTriangle = establishRigidTriangle(geometry);
+  const isFourBar = geometry.suspensionType === SuspensionType.FourBar;
+  const rigidTriangle = isFourBar ? null : establishRigidTriangle(geometry);
+  const fourBarRig = isFourBar ? establishFourBar(geometry) : null;
+  let tracker: FourBarTracker | null = fourBarRig
+    ? initialTracker(fourBarRig)
+    : null;
 
   const stepSize = 0.5; // mm - finer steps for smoother graphs
   const strokeSteps = Math.floor(geometry.shockStroke / stepSize) + 1;
@@ -70,8 +89,34 @@ export function runKinematicAnalysis(
       fixedForkCompressionMM !== undefined
         ? fixedForkCompressionMM
         : travelRatio * geometry.forkTravel;
-    const state = calculateStateAtShockStroke(shockStroke, geometry, rigidTriangle);
-    firstPassStates.push({ ...state, proportionalForkStroke });
+
+    if (fourBarRig && tracker) {
+      const { solution, tracker: next } = solveFourBarAtStroke(
+        shockStroke,
+        geometry,
+        fourBarRig,
+        tracker,
+      );
+      tracker = next;
+      firstPassStates.push({
+        travelMM: solution.travelMM,
+        rearAxlePosition: solution.rearAxlePosition,
+        bbPosition: solution.bbPosition,
+        pivotPosition: solution.instantCenter,
+        swingarmEyePosition: solution.shockEyePosition,
+        shockLength: solution.shockLength,
+        proportionalForkStroke,
+        fourBar: {
+          mainPivot: solution.mainPivot,
+          rockerPivot: solution.rockerPivot,
+          seatstayLower: solution.seatstayLower,
+          seatstayUpper: solution.seatstayUpper,
+        },
+      });
+    } else {
+      const state = calculateStateAtShockStroke(shockStroke, geometry, rigidTriangle!);
+      firstPassStates.push({ ...state, proportionalForkStroke, fourBar: null });
+    }
   }
 
   // Second pass: build full BikeState with no dummy initialisation
@@ -220,6 +265,14 @@ export function runKinematicAnalysis(
       chainringCenter: toKP(chainringCenterWorld),
       idler: idlerWorld ? toKP(idlerWorld) : null,
       centreOfMass: toKP(centreOfMassWorld),
+      fourBar: fp.fourBar
+        ? {
+            mainPivot: toKP(fp.fourBar.mainPivot),
+            rockerPivot: toKP(fp.fourBar.rockerPivot),
+            seatstayLower: toKP(fp.fourBar.seatstayLower),
+            seatstayUpper: toKP(fp.fourBar.seatstayUpper),
+          }
+        : null,
     };
 
     states.push(state);
@@ -388,7 +441,7 @@ function calculateStateAtShockStroke(
   shockStroke: number,
   geometry: BikeGeometry,
   rigidTriangle: RigidTriangle,
-): Omit<FirstPassState, "proportionalForkStroke"> {
+): Omit<FirstPassState, "proportionalForkStroke" | "fourBar"> {
   const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
 
   const eyeToAxleDistance = rigidTriangle.eyeToAxle;
@@ -674,6 +727,14 @@ export function overrideForkCompression(
     chainringCenter: toKP(state.chainringCenter.world),
     idler: state.idler ? toKP(state.idler.world) : null,
     centreOfMass: toKP(state.centreOfMass.world),
+    fourBar: state.fourBar
+      ? {
+          mainPivot: toKP(state.fourBar.mainPivot.world),
+          rockerPivot: toKP(state.fourBar.rockerPivot.world),
+          seatstayLower: toKP(state.fourBar.seatstayLower.world),
+          seatstayUpper: toKP(state.fourBar.seatstayUpper.world),
+        }
+      : null,
   };
 }
 

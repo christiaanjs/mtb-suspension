@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { BikeGeometry, IdlerType } from "@/lib/types";
+import { BikeGeometry, IdlerType, SuspensionType } from "@/lib/types";
 import { Attribution } from "./Attribution";
 
 interface InputFieldProps {
@@ -134,6 +134,133 @@ export function InputSection({
   );
 }
 
+interface GeometryInputsProps {
+  geometry: BikeGeometry;
+  onGeometryChange: (updates: Partial<BikeGeometry>) => void;
+}
+
+export function SuspensionTypeField({
+  geometry,
+  onGeometryChange,
+}: GeometryInputsProps) {
+  return (
+    <InputField
+      label="Suspension Type"
+      value={geometry.suspensionType}
+      onChange={(val) =>
+        onGeometryChange({ suspensionType: val as SuspensionType })
+      }
+      type="select"
+      options={[
+        { value: SuspensionType.SinglePivot, label: "Single Pivot" },
+        { value: SuspensionType.FourBar, label: "Four Bar" },
+      ]}
+    />
+  );
+}
+
+// Top-out positions of the four-bar joints (mm from BB). Reused by the main
+// input panel and the dedicated linkage page.
+export function FourBarLinkageInputs({
+  geometry,
+  onGeometryChange,
+}: GeometryInputsProps) {
+  return (
+    <>
+      <InputGroupLabel>Main Pivot (chainstay, from BB)</InputGroupLabel>
+      <InputField
+        label="X"
+        unit="mm"
+        value={geometry.lowerLinkPivotX}
+        onChange={(val) => onGeometryChange({ lowerLinkPivotX: val as number })}
+        className="pl-2"
+      />
+      <InputField
+        label="Y"
+        unit="mm"
+        value={geometry.lowerLinkPivotY}
+        onChange={(val) => onGeometryChange({ lowerLinkPivotY: val as number })}
+        className="pl-2"
+      />
+      <InputGroupLabel>Rocker Pivot (from BB)</InputGroupLabel>
+      <InputField
+        label="X"
+        unit="mm"
+        value={geometry.rockerPivotX}
+        onChange={(val) => onGeometryChange({ rockerPivotX: val as number })}
+        className="pl-2"
+      />
+      <InputField
+        label="Y"
+        unit="mm"
+        value={geometry.rockerPivotY}
+        onChange={(val) => onGeometryChange({ rockerPivotY: val as number })}
+        className="pl-2"
+      />
+      <InputGroupLabel>Rocker → Shock Eye (from BB)</InputGroupLabel>
+      <InputField
+        label="X"
+        unit="mm"
+        value={geometry.rockerShockMountX}
+        onChange={(val) => onGeometryChange({ rockerShockMountX: val as number })}
+        className="pl-2"
+      />
+      <InputField
+        label="Y"
+        unit="mm"
+        value={geometry.rockerShockMountY}
+        onChange={(val) => onGeometryChange({ rockerShockMountY: val as number })}
+        className="pl-2"
+      />
+      <InputGroupLabel>Rocker → Seatstay Joint (from BB)</InputGroupLabel>
+      <InputField
+        label="X"
+        unit="mm"
+        value={geometry.rockerSeatstayX}
+        onChange={(val) => onGeometryChange({ rockerSeatstayX: val as number })}
+        className="pl-2"
+      />
+      <InputField
+        label="Y"
+        unit="mm"
+        value={geometry.rockerSeatstayY}
+        onChange={(val) => onGeometryChange({ rockerSeatstayY: val as number })}
+        className="pl-2"
+      />
+      <InputGroupLabel>Chainstay → Seatstay Joint (from BB)</InputGroupLabel>
+      <InputField
+        label="X"
+        unit="mm"
+        value={geometry.seatstayLowerX}
+        onChange={(val) => onGeometryChange({ seatstayLowerX: val as number })}
+        className="pl-2"
+      />
+      <InputField
+        label="Y"
+        unit="mm"
+        value={geometry.seatstayLowerY}
+        onChange={(val) => onGeometryChange({ seatstayLowerY: val as number })}
+        className="pl-2"
+      />
+      <InputGroupLabel>Rear Axle (from BB)</InputGroupLabel>
+      <InputField
+        label="X"
+        unit="mm"
+        value={geometry.fourBarAxleX}
+        onChange={(val) => onGeometryChange({ fourBarAxleX: val as number })}
+        className="pl-2"
+      />
+      <InputField
+        label="Y"
+        unit="mm"
+        value={geometry.fourBarAxleY}
+        onChange={(val) => onGeometryChange({ fourBarAxleY: val as number })}
+        className="pl-2"
+      />
+    </>
+  );
+}
+
 interface InputPanelProps {
   geometry: BikeGeometry;
   onGeometryChange: (updates: Partial<BikeGeometry>) => void;
@@ -176,6 +303,14 @@ export function InputPanel({
             className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500 transition-shadow"
           />
         </div>
+
+        {/* Suspension type */}
+        <InputSection title="Suspension Layout">
+          <SuspensionTypeField
+            geometry={geometry}
+            onGeometryChange={onGeometryChange}
+          />
+        </InputSection>
 
         {/* Frame */}
         <InputSection title="Frame">
@@ -261,26 +396,34 @@ export function InputPanel({
 
         {/* Suspension */}
         <InputSection title="Suspension">
-          <InputField
-            label="Swingarm Length"
-            unit="mm"
-            value={geometry.swingarmLength}
-            onChange={(val) =>
-              onGeometryChange({ swingarmLength: val as number })
-            }
-          />
-          <InputField
-            label="Pivot X"
-            unit="mm"
-            value={geometry.bbToPivotX}
-            onChange={(val) => onGeometryChange({ bbToPivotX: val as number })}
-          />
-          <InputField
-            label="Pivot Y"
-            unit="mm"
-            value={geometry.bbToPivotY}
-            onChange={(val) => onGeometryChange({ bbToPivotY: val as number })}
-          />
+          {geometry.suspensionType === SuspensionType.SinglePivot && (
+            <>
+              <InputField
+                label="Swingarm Length"
+                unit="mm"
+                value={geometry.swingarmLength}
+                onChange={(val) =>
+                  onGeometryChange({ swingarmLength: val as number })
+                }
+              />
+              <InputField
+                label="Pivot X"
+                unit="mm"
+                value={geometry.bbToPivotX}
+                onChange={(val) =>
+                  onGeometryChange({ bbToPivotX: val as number })
+                }
+              />
+              <InputField
+                label="Pivot Y"
+                unit="mm"
+                value={geometry.bbToPivotY}
+                onChange={(val) =>
+                  onGeometryChange({ bbToPivotY: val as number })
+                }
+              />
+            </>
+          )}
           <InputField
             label="Rear Wheel Diameter"
             unit="mm"
@@ -290,6 +433,16 @@ export function InputPanel({
             }
           />
         </InputSection>
+
+        {/* Four-bar linkage */}
+        {geometry.suspensionType === SuspensionType.FourBar && (
+          <InputSection title="Four-Bar Linkage">
+            <FourBarLinkageInputs
+              geometry={geometry}
+              onGeometryChange={onGeometryChange}
+            />
+          </InputSection>
+        )}
 
         {/* Shock */}
         <InputSection title="Shock">
@@ -332,16 +485,20 @@ export function InputPanel({
             }
             className="pl-2"
           />
-          <InputGroupLabel>Swingarm Mount</InputGroupLabel>
-          <InputField
-            label="Distance from pivot"
-            unit="mm"
-            value={geometry.shockSwingarmMountDistance}
-            onChange={(val) =>
-              onGeometryChange({ shockSwingarmMountDistance: val as number })
-            }
-            className="pl-2"
-          />
+          {geometry.suspensionType === SuspensionType.SinglePivot && (
+            <>
+              <InputGroupLabel>Swingarm Mount</InputGroupLabel>
+              <InputField
+                label="Distance from pivot"
+                unit="mm"
+                value={geometry.shockSwingarmMountDistance}
+                onChange={(val) =>
+                  onGeometryChange({ shockSwingarmMountDistance: val as number })
+                }
+                className="pl-2"
+              />
+            </>
+          )}
         </InputSection>
 
         {/* Drivetrain */}

@@ -48,7 +48,15 @@ export enum IdlerType {
   SwingarmMounted = "Swingarm Mounted",
 }
 
+export enum SuspensionType {
+  SinglePivot = "Single Pivot",
+  FourBar = "Four Bar",
+}
+
 export interface BikeGeometry {
+  // Suspension layout
+  suspensionType: SuspensionType;
+
   // Frame - Primary Inputs
   bbHeight: number; // mm from ground
   stack: number; // mm
@@ -63,9 +71,25 @@ export interface BikeGeometry {
   forkLength: number; // mm (axle to crown)
   forkOffset: number; // mm (rake)
 
-  // Suspension
+  // Suspension (single pivot)
   totalTravel: number; // mm
   swingarmLength: number; // mm (pivot to rear axle)
+
+  // Four-bar linkage (top-out positions, mm from BB)
+  // The linkage is defined by the resting (top-out) positions of each joint.
+  // Fixed lengths and rigid-body relationships are derived from these once.
+  lowerLinkPivotX: number; // main / chainstay pivot on frame
+  lowerLinkPivotY: number;
+  rockerPivotX: number; // rocker pivot on frame
+  rockerPivotY: number;
+  rockerShockMountX: number; // shock eye on rocker (moving shock mount)
+  rockerShockMountY: number;
+  rockerSeatstayX: number; // upper seatstay junction (on rocker)
+  rockerSeatstayY: number;
+  seatstayLowerX: number; // lower seatstay junction (on chainstay, the "Horst" pivot)
+  seatstayLowerY: number;
+  fourBarAxleX: number; // rear axle at top-out (carried by the seatstay)
+  fourBarAxleY: number;
 
   // Shock
   shockFrameMountX: number; // mm from BB
@@ -105,6 +129,7 @@ export function createDefaultGeometry({
   overrides,
 }: { overrides?: Partial<BikeGeometry> } = {}): BikeGeometry {
   return {
+    suspensionType: SuspensionType.SinglePivot,
     bbHeight: 330.0,
     stack: 625.0,
     reach: 490.0,
@@ -117,6 +142,20 @@ export function createDefaultGeometry({
     forkOffset: 44.0,
     totalTravel: 150.0,
     swingarmLength: 440.0,
+    // Four-bar default linkage (top-out positions relative to BB; BB world ≈ (0, 330)).
+    // Tuned for ~150 mm rear travel with a progressive leverage ratio (~2.2–2.6).
+    lowerLinkPivotX: -30.0,
+    lowerLinkPivotY: 20.0,
+    rockerPivotX: -20.0,
+    rockerPivotY: 230.0,
+    rockerShockMountX: 25.0,
+    rockerShockMountY: 260.0,
+    rockerSeatstayX: -90.0,
+    rockerSeatstayY: 260.0,
+    seatstayLowerX: -435.0,
+    seatstayLowerY: 10.0,
+    fourBarAxleX: -445.0,
+    fourBarAxleY: 45.0,
     shockFrameMountX: 30.0,
     shockFrameMountY: 70.0,
     shockSwingarmMountDistance: 190.0,
@@ -186,6 +225,18 @@ export interface BikeState extends KinematicState {
   chainringCenter: KinematicPoint;
   idler: KinematicPoint | null;
   centreOfMass: KinematicPoint;
+
+  // Four-bar linkage points (null for single-pivot bikes).
+  // For four-bar bikes `pivot` holds the (virtual) instant centre and
+  // `swingarmEye` holds the moving shock mount on the rocker.
+  fourBar: FourBarLinkagePoints | null;
+}
+
+export interface FourBarLinkagePoints {
+  mainPivot: KinematicPoint; // chainstay pivot on frame
+  rockerPivot: KinematicPoint; // rocker pivot on frame
+  seatstayLower: KinematicPoint; // chainstay ↔ seatstay junction
+  seatstayUpper: KinematicPoint; // seatstay ↔ rocker junction
 }
 
 export interface AnalysisResults {
