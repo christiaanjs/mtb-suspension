@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { runKinematicAnalysis } from "./kinematics";
-import { createDefaultGeometry, SuspensionType } from "./types";
+import { runKinematicAnalysis, getIdlerPosition } from "./kinematics";
+import { createDefaultGeometry, SuspensionType, IdlerType } from "./types";
 import { distance, lineIntersection } from "./geometry";
 
 const fourBarGeometry = () =>
@@ -139,5 +139,95 @@ describe("Four-bar linkage", () => {
     for (const state of results.states) {
       expect(state.rearAxle.world.y).toBeCloseTo(rearWheelRadius, 3);
     }
+  });
+
+  describe("swingarm-mounted idler", () => {
+    const geometry = createDefaultGeometry({
+      overrides: {
+        suspensionType: SuspensionType.FourBar,
+        idlerType: IdlerType.SwingarmMounted,
+        idlerX: -120,
+        idlerY: 120,
+        idlerTeeth: 16,
+      },
+    });
+    const results = runKinematicAnalysis(geometry);
+
+    it("places an idler on every state", () => {
+      for (const state of results.states) {
+        expect(state.idler).not.toBeNull();
+      }
+    });
+
+    it("at top-out the idler sits at the configured BB-relative position", () => {
+      const top = results.states[0];
+      expect(top.idler!.world.x).toBeCloseTo(top.bb.world.x + geometry.idlerX, 3);
+      expect(top.idler!.world.y).toBeCloseTo(top.bb.world.y + geometry.idlerY, 3);
+    });
+
+    it("the idler stays rigidly attached to the seatstay", () => {
+      const TOLERANCE = 0.05; // mm
+      const ref = results.states[0];
+      const dLower0 = distance(ref.idler!.world, ref.fourBar!.seatstayLower.world);
+      const dUpper0 = distance(ref.idler!.world, ref.fourBar!.seatstayUpper.world);
+      const dAxle0 = distance(ref.idler!.world, ref.rearAxle.world);
+      for (const state of results.states) {
+        expect(
+          Math.abs(distance(state.idler!.world, state.fourBar!.seatstayLower.world) - dLower0),
+        ).toBeLessThan(TOLERANCE);
+        expect(
+          Math.abs(distance(state.idler!.world, state.fourBar!.seatstayUpper.world) - dUpper0),
+        ).toBeLessThan(TOLERANCE);
+        expect(
+          Math.abs(distance(state.idler!.world, state.rearAxle.world) - dAxle0),
+        ).toBeLessThan(TOLERANCE);
+      }
+    });
+
+    it("getIdlerPosition matches the state idler position", () => {
+      for (const state of results.states) {
+        const p = getIdlerPosition(state, geometry);
+        expect(p).not.toBeNull();
+        expect(p!.x).toBeCloseTo(state.idler!.world.x, 6);
+        expect(p!.y).toBeCloseTo(state.idler!.world.y, 6);
+      }
+    });
+
+    it("chain growth and pedal kickback are zero at top-out and finite throughout", () => {
+      expect(results.states[0].chainGrowth).toBeCloseTo(0, 5);
+      expect(results.states[0].pedalKickback).toBeCloseTo(0, 5);
+      for (const state of results.states) {
+        expect(Number.isFinite(state.chainGrowth)).toBe(true);
+        expect(Number.isFinite(state.pedalKickback)).toBe(true);
+        expect(Number.isFinite(state.antiSquat)).toBe(true);
+      }
+    });
+  });
+
+  describe("frame-mounted idler", () => {
+    const geometry = createDefaultGeometry({
+      overrides: {
+        suspensionType: SuspensionType.FourBar,
+        idlerType: IdlerType.FrameMounted,
+        idlerX: -60,
+        idlerY: 160,
+        idlerTeeth: 16,
+      },
+    });
+    const results = runKinematicAnalysis(geometry);
+
+    it("idler stays at a fixed BB-relative offset", () => {
+      for (const state of results.states) {
+        expect(state.idler!.world.x).toBeCloseTo(state.bb.world.x + geometry.idlerX, 3);
+        expect(state.idler!.world.y).toBeCloseTo(state.bb.world.y + geometry.idlerY, 3);
+      }
+    });
+
+    it("chain growth is zero at top-out and finite throughout", () => {
+      expect(results.states[0].chainGrowth).toBeCloseTo(0, 5);
+      for (const state of results.states) {
+        expect(Number.isFinite(state.chainGrowth)).toBe(true);
+      }
+    });
   });
 });
