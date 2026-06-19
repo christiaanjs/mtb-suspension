@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { useBikeViewModel } from "@/hooks/useBikeViewModel";
 import { InputPanel } from "@/components/InputPanel";
 import { AnimationView } from "@/components/Visualization";
@@ -143,6 +144,14 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-1.5 lg:gap-2 flex-shrink-0">
+            <Link
+              href="/linkage"
+              className={secondaryButtonClass}
+              title="Open the four-bar linkage inspector"
+            >
+              <ChartIcon className="w-4 h-4" />
+              <span className="hidden md:inline">Linkage</span>
+            </Link>
             <label className={secondaryButtonClass} title="Open design (.json)">
               <OpenIcon />
               <span className="hidden md:inline">Open</span>

@@ -3,6 +3,7 @@ import {
   GraphType,
   LineSegment,
   Point2D,
+  SuspensionType,
 } from "@/lib/types";
 import { DrawComponentProps } from "./types";
 import { doAntiSquatCalculations, doAntiRiseCalculations } from "@/lib/kinematics";
@@ -277,10 +278,39 @@ const AntiRiseCalculations = ({
   );
 };
 
-export const Calculations = ({
-  selectedGraph,
-  ...props
-}: DrawComponentProps & { selectedGraph: string }) => {
+// For a four-bar linkage the rear-wheel pivot is virtual: it is the instant
+// centre where the chainstay line and the rocker→seatstay line meet. Draw both
+// lines (extended) and mark their intersection so it is visible for every graph.
+const InstantCentreCalculations = ({ conversion, state }: DrawComponentProps) => {
+  const fourBar = state.fourBar;
+  if (!fourBar) return null;
+
+  const chainstayLine: LineSegment = {
+    start: fourBar.mainPivot.wheelsOnGround,
+    end: fourBar.seatstayLower.wheelsOnGround,
+  };
+  const rockerLine: LineSegment = {
+    start: fourBar.rockerPivot.wheelsOnGround,
+    end: fourBar.seatstayUpper.wheelsOnGround,
+  };
+  const ic = conversion.toCanvas(state.pivot.wheelsOnGround);
+
+  return (
+    <>
+      <ReferenceLine line={chainstayLine} conversion={conversion} />
+      <ReferenceLine line={rockerLine} conversion={conversion} />
+      <circle cx={ic.x} cy={ic.y} r={4} fill="#16a34a" />
+      <text x={ic.x + 8} y={ic.y - 6} fontSize="11" fill="#16a34a">
+        Instant centre
+      </text>
+    </>
+  );
+};
+
+const graphCalculations = (
+  selectedGraph: string,
+  props: DrawComponentProps,
+) => {
   switch (selectedGraph) {
     case GraphType.AntiSquat:
       return <AntiSquatCalculations {...props} />;
@@ -289,6 +319,20 @@ export const Calculations = ({
     default:
       return null;
   }
+};
+
+export const Calculations = ({
+  selectedGraph,
+  ...props
+}: DrawComponentProps & { selectedGraph: string }) => {
+  const isFourBar =
+    props.geometry.suspensionType === SuspensionType.FourBar;
+  return (
+    <>
+      {isFourBar && <InstantCentreCalculations {...props} />}
+      {graphCalculations(selectedGraph, props)}
+    </>
+  );
 };
 
 export default Calculations;

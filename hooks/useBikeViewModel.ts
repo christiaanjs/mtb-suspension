@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   BikeGeometry,
   AnalysisResults,
@@ -30,10 +30,18 @@ const getOverridesFromQuery = (idlerQuery: string | null) => {
 
 type Options = {
   idlerQuery?: string | null;
+  /** Extra geometry overrides applied on top of defaults (e.g. forcing a suspension type). */
+  geometryOverrides?: Partial<BikeGeometry>;
 };
 
-export function useBikeViewModel({ idlerQuery = null }: Options = {}) {
-  const overrides = getOverridesFromQuery(idlerQuery);
+export function useBikeViewModel({
+  idlerQuery = null,
+  geometryOverrides,
+}: Options = {}) {
+  const overrides = useMemo(
+    () => ({ ...getOverridesFromQuery(idlerQuery), ...geometryOverrides }),
+    [idlerQuery, geometryOverrides],
+  );
   const [geometry, setGeometry] = useState<BikeGeometry>(
     createDefaultGeometry({ overrides }),
   );

@@ -10,7 +10,14 @@ import {
   Circle,
   IdlerType,
   LineSegment,
+  SuspensionType,
 } from "./types";
+import {
+  establishFourBar,
+  solveFourBarAtStroke,
+  initialTracker,
+  FourBarTracker,
+} from "./fourbar";
 import {
   distance,
   angle,
@@ -37,10 +44,17 @@ interface FirstPassState {
   travelMM: number;
   rearAxlePosition: Point2D;
   bbPosition: Point2D;
-  pivotPosition: Point2D;
-  swingarmEyePosition: Point2D;
+  pivotPosition: Point2D; // single pivot: physical pivot; four-bar: instant centre
+  swingarmEyePosition: Point2D; // single pivot: shock eye on swingarm; four-bar: shock eye on rocker
   shockLength: number;
   proportionalForkStroke: number;
+  // Extra linkage points for four-bar bikes (world frame), null otherwise.
+  fourBar: {
+    mainPivot: Point2D;
+    rockerPivot: Point2D;
+    seatstayLower: Point2D;
+    seatstayUpper: Point2D;
+  } | null;
 }
 
 /**
@@ -56,7 +70,12 @@ export function runKinematicAnalysis(
   geometry: BikeGeometry,
   fixedForkCompressionMM?: number,
 ): AnalysisResults {
-  const rigidTriangle = establishRigidTriangle(geometry);
+  const isFourBar = geometry.suspensionType === SuspensionType.FourBar;
+  const rigidTriangle = isFourBar ? null : establishRigidTriangle(geometry);
+  const fourBarRig = isFourBar ? establishFourBar(geometry) : null;
+  let tracker: FourBarTracker | null = fourBarRig
+    ? initialTracker(fourBarRig)
+    : null;
 
   const stepSize = 0.5; // mm - finer steps for smoother graphs
   const strokeSteps = Math.floor(geometry.shockStroke / stepSize) + 1;
@@ -70,8 +89,34 @@ export function runKinematicAnalysis(
       fixedForkCompressionMM !== undefined
         ? fixedForkCompressionMM
         : travelRatio * geometry.forkTravel;
-    const state = calculateStateAtShockStroke(shockStroke, geometry, rigidTriangle);
-    firstPassStates.push({ ...state, proportionalForkStroke });
+
+    if (fourBarRig && tracker) {
+      const { solution, tracker: next } = solveFourBarAtStroke(
+        shockStroke,
+        geometry,
+        fourBarRig,
+        tracker,
+      );
+      tracker = next;
+      firstPassStates.push({
+        travelMM: solution.travelMM,
+        rearAxlePosition: solution.rearAxlePosition,
+        bbPosition: solution.bbPosition,
+        pivotPosition: solution.instantCenter,
+        swingarmEyePosition: solution.shockEyePosition,
+        shockLength: solution.shockLength,
+        proportionalForkStroke,
+        fourBar: {
+          mainPivot: solution.mainPivot,
+          rockerPivot: solution.rockerPivot,
+          seatstayLower: solution.seatstayLower,
+          seatstayUpper: solution.seatstayUpper,
+        },
+      });
+    } else {
+      const state = calculateStateAtShockStroke(shockStroke, geometry, rigidTriangle!);
+      firstPassStates.push({ ...state, proportionalForkStroke, fourBar: null });
+    }
   }
 
   // Second pass: build full BikeState with no dummy initialisation
@@ -84,6 +129,7 @@ export function runKinematicAnalysis(
     firstPassStates[0].pivotPosition,
     firstPassStates[0].rearAxlePosition,
     geometry,
+    seatstayReferenceFromFp(firstPassStates[0]),
   );
   const chainringRadius = sprocketRadius(geometry.chainringTeeth);
 
@@ -145,6 +191,7 @@ export function runKinematicAnalysis(
 
     const wheelRate = geometry.shockSpringRate / (leverageRatio * leverageRatio);
 
+    const seatstayRef = seatstayReferenceFromFp(fp);
     const antiSquat = calculateVisualAntiSquat(fp, frontAxlePos, geometry, applyPitchRotation);
     const antiRise = calculateVisualAntiRise(fp, frontAxlePos, geometry, applyPitchRotation);
     const trail = computeTrail(fp, frontAxlePos, geometry, applyPitchRotation);
@@ -176,6 +223,7 @@ export function runKinematicAnalysis(
       fp.pivotPosition,
       fp.rearAxlePosition,
       geometry,
+      seatstayRef,
     );
     const centreOfMassWorld: Point2D = {
       x: fp.bbPosition.x + geometry.comX,
@@ -187,6 +235,7 @@ export function runKinematicAnalysis(
       fp.pivotPosition,
       fp.rearAxlePosition,
       geometry,
+      seatstayRef,
     );
     const chainGrowth = (currentChainLength - referenceChainLength) / 2;
     const totalChainGrowth = chainGrowth;
@@ -220,6 +269,14 @@ export function runKinematicAnalysis(
       chainringCenter: toKP(chainringCenterWorld),
       idler: idlerWorld ? toKP(idlerWorld) : null,
       centreOfMass: toKP(centreOfMassWorld),
+      fourBar: fp.fourBar
+        ? {
+            mainPivot: toKP(fp.fourBar.mainPivot),
+            rockerPivot: toKP(fp.fourBar.rockerPivot),
+            seatstayLower: toKP(fp.fourBar.seatstayLower),
+            seatstayUpper: toKP(fp.fourBar.seatstayUpper),
+          }
+        : null,
     };
 
     states.push(state);
@@ -388,7 +445,7 @@ function calculateStateAtShockStroke(
   shockStroke: number,
   geometry: BikeGeometry,
   rigidTriangle: RigidTriangle,
-): Omit<FirstPassState, "proportionalForkStroke"> {
+): Omit<FirstPassState, "proportionalForkStroke" | "fourBar"> {
   const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
 
   const eyeToAxleDistance = rigidTriangle.eyeToAxle;
@@ -471,13 +528,23 @@ function calculateStateAtShockStroke(
   };
 }
 
+// A rigid rear body used to carry a swingarm/seatstay-mounted idler, given by
+// two of its points in both top-out and current configurations.
+type SwingarmReference = { lower: Point2D; upper: Point2D } | null;
+
 // Internal helper: resolves idler position from raw world-frame points.
 // Used both during KinematicState construction and via the public getIdlerPosition.
+//
+// For a swingarm-mounted idler the idler is rigidly attached to the rear body:
+//   - Single pivot: that body is the swingarm (pivot → axle reference line).
+//   - Four bar:     that body is the seatstay (lower → upper junction reference
+//                   line); pass its current points via `seatstay`.
 function idlerPositionFromWorld(
   bbPos: Point2D,
   pivotPos: Point2D,
   rearAxlePos: Point2D,
   geometry: BikeGeometry,
+  seatstay: SwingarmReference = null,
 ): Point2D | null {
   if (geometry.idlerType === IdlerType.None) {
     return null;
@@ -485,11 +552,34 @@ function idlerPositionFromWorld(
     return Point2D.add(bbPos, { x: geometry.idlerX, y: geometry.idlerY });
   } else {
     // Swingarm-mounted idler
-    const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
     const topOutIdler = {
       x: geometry.idlerX,
       y: geometry.bbHeight + geometry.idlerY,
     };
+
+    if (geometry.suspensionType === SuspensionType.FourBar && seatstay) {
+      // Four bar: the seatstay carries the rear axle, so the idler rides with
+      // it. Use the seatstay's own lower→upper junction line as the rigid
+      // reference (long, numerically stable baseline).
+      const topOutLower = {
+        x: geometry.seatstayLowerX,
+        y: geometry.bbHeight + geometry.seatstayLowerY,
+      };
+      const topOutUpper = {
+        x: geometry.rockerSeatstayX,
+        y: geometry.bbHeight + geometry.rockerSeatstayY,
+      };
+      return transformPointByReferenceLine(
+        topOutLower,
+        topOutUpper,
+        topOutIdler,
+        seatstay.lower,
+        seatstay.upper,
+      );
+    }
+
+    // Single pivot: idler is fixed to the swingarm (pivot → axle reference).
+    const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
     const topOutPivot = {
       x: geometry.bbToPivotX,
       y: geometry.bbHeight + geometry.bbToPivotY,
@@ -522,21 +612,43 @@ export const getIdlerPosition = (
     state.pivot.world,
     state.rearAxle.world,
     geometry,
+    seatstayReferenceFromState(state),
   );
 };
+
+// Extracts the seatstay reference (world frame) from a state, or null when the
+// state has no four-bar linkage.
+function seatstayReferenceFromState(
+  state: KinematicState | BikeState,
+): SwingarmReference {
+  const fourBar = "fourBar" in state ? state.fourBar : null;
+  if (!fourBar) return null;
+  return {
+    lower: fourBar.seatstayLower.world,
+    upper: fourBar.seatstayUpper.world,
+  };
+}
+
+// Same as above, for the internal first-pass state.
+function seatstayReferenceFromFp(fp: FirstPassState): SwingarmReference {
+  return fp.fourBar
+    ? { lower: fp.fourBar.seatstayLower, upper: fp.fourBar.seatstayUpper }
+    : null;
+}
 
 function getFrontSprocketCircle(
   bbPos: Point2D,
   pivotPos: Point2D,
   rearAxlePos: Point2D,
   geometry: BikeGeometry,
+  seatstay: SwingarmReference,
 ): Circle {
   if (geometry.idlerType === IdlerType.FrameMounted) {
     // The chainring→idler segment is frame-fixed and does not apply force to the
     // swingarm.  The idler acts as the effective "front" of the driving segment
     // (idler → rear cog) that determines anti-squat.
     const radius = sprocketRadius(geometry.idlerTeeth);
-    const center = idlerPositionFromWorld(bbPos, pivotPos, rearAxlePos, geometry)!;
+    const center = idlerPositionFromWorld(bbPos, pivotPos, rearAxlePos, geometry, seatstay)!;
     return { center, radius };
   } else {
     // No idler: chainring → rear cog.
@@ -556,6 +668,7 @@ function getRearSprocketCircle(
   pivotPos: Point2D,
   rearAxlePos: Point2D,
   geometry: BikeGeometry,
+  seatstay: SwingarmReference,
 ): Circle {
   if (
     geometry.idlerType === IdlerType.None ||
@@ -563,7 +676,7 @@ function getRearSprocketCircle(
   ) {
     return { center: rearAxlePos, radius: sprocketRadius(geometry.cogTeeth) };
   } else {
-    const center = idlerPositionFromWorld(bbPos, pivotPos, rearAxlePos, geometry)!;
+    const center = idlerPositionFromWorld(bbPos, pivotPos, rearAxlePos, geometry, seatstay)!;
     return { center, radius: sprocketRadius(geometry.idlerTeeth) };
   }
 }
@@ -577,6 +690,7 @@ function calculateDrivetrainChainLength(
   pivotPos: Point2D,
   rearAxlePos: Point2D,
   geometry: BikeGeometry,
+  seatstay: SwingarmReference,
 ): number {
   const chainringCenter: Point2D = {
     x: bbPos.x + geometry.chainringOffsetX,
@@ -589,7 +703,7 @@ function calculateDrivetrainChainLength(
     return calculateChainLength(chainringCenter, rearAxlePos, chainringRadius, cogRadius);
   }
 
-  const idlerPos = idlerPositionFromWorld(bbPos, pivotPos, rearAxlePos, geometry)!;
+  const idlerPos = idlerPositionFromWorld(bbPos, pivotPos, rearAxlePos, geometry, seatstay)!;
   const idlerRadius = sprocketRadius(geometry.idlerTeeth);
 
   if (geometry.idlerType === IdlerType.FrameMounted) {
@@ -674,6 +788,14 @@ export function overrideForkCompression(
     chainringCenter: toKP(state.chainringCenter.world),
     idler: state.idler ? toKP(state.idler.world) : null,
     centreOfMass: toKP(state.centreOfMass.world),
+    fourBar: state.fourBar
+      ? {
+          mainPivot: toKP(state.fourBar.mainPivot.world),
+          rockerPivot: toKP(state.fourBar.rockerPivot.world),
+          seatstayLower: toKP(state.fourBar.seatstayLower.world),
+          seatstayUpper: toKP(state.fourBar.seatstayUpper.world),
+        }
+      : null,
   };
 }
 
@@ -713,16 +835,17 @@ function computeAntiSquatSteps(
   frontAxlePos: Point2D,
   applyPitchRotation: (p: Point2D) => Point2D,
   geometry: BikeGeometry,
+  seatstay: SwingarmReference,
   opts: { sprocketTangent?: boolean; warn?: boolean } = {},
 ): AntiSquatCalculations {
   const { sprocketTangent = true, warn = false } = opts;
 
-  const frontSprocket = getFrontSprocketCircle(bbPos, pivotPos, rearAxlePos, geometry);
+  const frontSprocket = getFrontSprocketCircle(bbPos, pivotPos, rearAxlePos, geometry, seatstay);
   const frontSprocketRotated = {
     center: applyPitchRotation(frontSprocket.center),
     radius: frontSprocket.radius,
   };
-  const rearSprocket = getRearSprocketCircle(bbPos, pivotPos, rearAxlePos, geometry);
+  const rearSprocket = getRearSprocketCircle(bbPos, pivotPos, rearAxlePos, geometry, seatstay);
   const rearSprocketRotated = {
     center: applyPitchRotation(rearSprocket.center),
     radius: rearSprocket.radius,
@@ -806,6 +929,7 @@ export const doAntiSquatCalculations = (
     state.frontAxle.world,
     applyPitchRotation,
     geometry,
+    seatstayReferenceFromState(state),
     opts,
   );
 };
@@ -872,6 +996,7 @@ function calculateVisualAntiSquat(
     frontAxlePos,
     applyPitchRotation,
     geometry,
+    seatstayReferenceFromFp(fp),
     opts,
   );
   if (!("antiSquatIntersection" in calculations)) return 0;

@@ -8,10 +8,12 @@ import {
   getScreenConversions,
   Point2D,
 } from "@/lib/types";
+import { SuspensionType } from "@/lib/types";
 import { overrideForkCompression } from "@/lib/kinematics";
 import { GroundLine } from "./visualization/GroundLine";
 import { FrontTriangle } from "./visualization/FrontTriangle";
 import { Swingarm } from "./visualization/Swingarm";
+import { Linkage } from "./visualization/Linkage";
 import { Fork } from "./visualization/Fork";
 import { Wheels } from "./visualization/Wheels";
 import { Drivetrain } from "./visualization/Drivetrain";
@@ -128,7 +130,11 @@ export function BikeVisualization({
 
         <GroundLine {...drawProps} />
         <FrontTriangle {...drawProps} />
-        <Swingarm {...drawProps} />
+        {geometry.suspensionType === SuspensionType.FourBar ? (
+          <Linkage {...drawProps} />
+        ) : (
+          <Swingarm {...drawProps} />
+        )}
         <Fork {...drawProps} />
         <Wheels {...drawProps} />
         <Drivetrain {...drawProps} />
