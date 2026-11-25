@@ -1,6 +1,6 @@
 # MTB Suspension Kinematics - Web app
 
-Deployed at [https://mtb-suspension-nine.vercel.app](https://mtb-suspension-nine.vercel.app)
+Hosted on Cloudflare Pages (production deploys from `main`, previews on every pull request).
 
 Based on [work by Pat Crowe-Rishworth](https://github.com/patcroris/MTB-suspension-App)
 
@@ -36,11 +36,11 @@ Based on [work by Pat Crowe-Rishworth](https://github.com/patcroris/MTB-suspensi
 
 ## Technology Stack
 
-- **Framework**: Next.js 16.1.4
-- **UI Library**: React 19.2.3
+- **UI Library**: React 19.2.3 (single-page app, React Router)
 - **Language**: TypeScript 5
 - **Styling**: Tailwind CSS 4
-- **Build Tool**: Turbopack (Next.js built-in)
+- **Build Tool**: Vite 7
+- **Hosting**: Cloudflare Pages
 
 ## Project Structure
 
@@ -56,10 +56,12 @@ mtb-suspension-web/
 │   └── Graphs.tsx         # Analysis graphs and charts
 ├── hooks/
 │   └── useBikeViewModel.ts  # React hook for state management
-├── app/
-│   ├── page.tsx           # Main application layout
-│   ├── layout.tsx         # Root layout with metadata
+├── src/
+│   ├── main.tsx           # Entry point and routes
+│   ├── pages/             # Home and Linkage pages
 │   └── globals.css        # Global styles
+├── index.html             # Vite entry
+├── mcp/                   # MCP app server (Cloudflare Worker), see mcp/PLAN.md
 ├── package.json
 └── tsconfig.json
 ```
@@ -68,7 +70,7 @@ mtb-suspension-web/
 
 ### Prerequisites
 
-- Node.js 18+ and npm 9+
+- Node.js 20.19+ (or 22.12+) and npm 9+
 - A modern web browser
 
 ### Installation
@@ -178,7 +180,7 @@ npm run lint   # Check TypeScript and ESLint
 ### Code Style
 
 - TypeScript with strict mode enabled
-- ESLint configuration via Next.js
+- ESLint flat config (typescript-eslint, react-hooks)
 - Tailwind CSS for all styling
 
 ## License

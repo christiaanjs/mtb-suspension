@@ -13,7 +13,7 @@ export default defineConfig({
         "node_modules/",
         ".next/",
         "*.config.*",
-        "app/**",
+        "src/**",
         "components/**",
       ],
     },

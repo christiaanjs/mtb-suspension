@@ -21,7 +21,7 @@ Status legend: ✅ done in the spike · 🔲 not started · ❓ needs verificati
 **Non-goals (for now)**
 
 - Per-user auth, saved bikes, or any persisted state.
-- Replacing the Next.js web app. It stays untouched and keeps deploying to Vercel.
+- Changing the web app's behaviour. (It has since moved from Next.js to Vite + Cloudflare Pages in the same PR; the MCP viewer shares its Vite/Tailwind setup.)
 - Mutating tools. Everything is read-only compute.
 
 ---
@@ -56,7 +56,7 @@ MCP client ──POST /mcp──▶ Worker (stateless)
                           ├─ McpServer + WebStandardStreamableHTTPServerTransport
                           │    ├─ tool  analyze_bike   (_meta.ui.resourceUri → ui://…)
                           │    └─ resource ui://mtb-suspension/viewer.html (inlined HTML)
-                          └─ lib/kinematics.ts  (shared with the Next.js app)
+                          └─ lib/kinematics.ts  (shared with the web app)
 
 Claude host ──renders──▶ sandboxed iframe (viewer.html)
                           ├─ App.connect() → ontoolresult → structuredContent.geometry

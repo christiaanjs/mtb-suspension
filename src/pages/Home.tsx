@@ -1,7 +1,5 @@
-"use client";
-
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { useBikeViewModel } from "@/hooks/useBikeViewModel";
 import { InputPanel } from "@/components/InputPanel";
 import { AnimationView } from "@/components/Visualization";
@@ -145,7 +143,7 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-1.5 lg:gap-2 flex-shrink-0">
             <Link
-              href="/linkage"
+              to="/linkage"
               className={secondaryButtonClass}
               title="Open the four-bar linkage inspector"
             >

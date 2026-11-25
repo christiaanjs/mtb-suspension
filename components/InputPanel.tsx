@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState } from "react";
 import { BikeGeometry, IdlerType, SuspensionType } from "@/lib/types";
 import { Attribution } from "./Attribution";
