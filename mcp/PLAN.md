@@ -233,11 +233,12 @@ npm run build:ui          # dist/viewer.html
 npx wrangler login        # one-time
 npm run deploy            # build + wrangler deploy
 ```
-Then set `PUBLIC_MCP_URL` in `wrangler.jsonc` (`vars`) to the deployed
-`https://<name>.<account>.workers.dev/mcp` and redeploy. This is required for Claude's
-`ui.domain` (`<sha256(url)[:32]>.claudemcpcontent.com`, computed in
-`claudeUiDomain()` and unit-tested against the docs' example). If you later add
-a custom domain, the URL changes and so does the hash: update the var.
+Claude's `ui.domain` is `<sha256(server URL)[:32]>.claudemcpcontent.com`
+(`claudeUiDomain()`, unit-tested against the docs' example). The Worker computes it
+**per request from its own origin** (`<origin>/mcp`), so production, custom
+domains and every preview URL get the right value with no configuration. The
+optional `PUBLIC_MCP_URL` var overrides this (e.g. behind a proxy).
+Verified locally: `localhost:8788` and `127.0.0.1:8788` yield different, correct hashes.
 
 ### 7.3 CI/CD
 - ✅ `.github/workflows/mcp.yml` on PRs touching `mcp/`, `lib/`, `components/`:
@@ -256,6 +257,20 @@ a custom domain, the URL changes and so does the hash: update the var.
   - Avoid Cloudflare's "Edit Cloudflare Workers" template: it grants KV, R2, D1
     etc. this Worker doesn't use.
   - 🔲 Optionally gate the job with a GitHub Environment (required reviewers).
+- ✅ `.github/workflows/mcp-preview.yml`: **per-PR preview** (same-repo PRs only).
+  Runs `wrangler versions upload --preview-alias pr-<N>`, which uploads a new
+  Worker *version* without changing production and serves it at a stable
+  `pr-<N>-<worker>.<subdomain>.workers.dev` alias (free). A PR comment gives the
+  `/mcp` URL to add as a custom connector.
+  - Needs the same token (Workers Scripts: Edit) and `wrangler.jsonc`
+    `preview_urls: true`. The Worker must exist first: run `mcp-deploy` once.
+  - Previews share production's bindings, so they share the rate-limit counters
+    (acceptable; the Worker is stateless).
+  - ❓ Not yet run in CI. Check on first run: the preview-URL parsing of
+    wrangler's output, that `versions upload` accepts the rate-limit binding,
+    and that preview URLs are enabled for the Worker in the dashboard.
+  - 🔲 No automatic cleanup: preview versions/aliases accumulate. Cloudflare
+    keeps a bounded version history; revisit if aliases need pruning.
 - 🔲 Worker-level test with `unstable_dev`/Miniflare for routing, 405/413/429.
   Currently covered only by manual curl; the unit tests exercise the server
   in-memory, not `worker.ts`.
@@ -291,7 +306,7 @@ No geometry values need logging.
 | Phase | Scope | Exit criteria |
 |---|---|---|
 | **0 – Spike ✅** | Worker, one tool, viewer, tests, CI, plan | Local end-to-end works; CPU measured |
-| **1 – Ship privately** | Deploy to workers.dev, set `PUBLIC_MCP_URL`, connect from Claude, fix whatever breaks (CSP, theming) | Works in Claude; deployed CPU < 5 ms; 429 verified |
+| **1 – Ship privately** | Deploy to workers.dev, connect from Claude, fix whatever breaks (CSP, theming) | Works in Claude; deployed CPU < 5 ms; 429 verified |
 | **2 – Usable** | Presets + `get_input_help`; Graphs tab; better error messages; structured logging; Worker-level tests | A fresh Claude conversation can produce a sensible analysis from "I have a 150 mm four-bar with a 30 % progressive leverage curve…" |
 | **3 – Richer** | `compare_bikes`, `sweep_parameter`, in-view parameter edits via app-only tool | Compare view reviewed |
 | **4 – Directory (optional)** | Submit to Claude's connector directory | Needs: privacy policy, docs, test accounts, review; the directory flow may require OAuth-free "none" to be acceptable ❓ |

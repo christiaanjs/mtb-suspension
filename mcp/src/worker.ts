@@ -8,7 +8,11 @@ interface RateLimit {
 }
 
 export interface Env {
-  /** Public URL of the /mcp endpoint, used to derive Claude's ui.domain. */
+  /**
+   * Optional override for the public URL of the /mcp endpoint. By default the
+   * request's own origin is used, which is also correct for preview URLs.
+   * Claude's ui.domain is derived from this URL.
+   */
   PUBLIC_MCP_URL?: string;
   RATE_LIMITER?: RateLimit;
 }
@@ -53,9 +57,7 @@ export default {
 
     const server = buildServer({
       viewerHtml,
-      uiDomain: env.PUBLIC_MCP_URL
-        ? await claudeUiDomain(env.PUBLIC_MCP_URL)
-        : undefined,
+      uiDomain: await claudeUiDomain(env.PUBLIC_MCP_URL ?? `${url.origin}/mcp`),
     });
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,

@@ -5,10 +5,14 @@
   "compatibility_date": "2026-01-01",
   // Bundle the built single-file viewer as a text module.
   "rules": [{ "type": "Text", "globs": ["**/*.html"], "fallthrough": false }],
+  "workers_dev": true,
+  // Per-version preview URLs (used by the mcp-preview workflow).
+  "preview_urls": true,
   "vars": {
-    // Set to the deployed URL, e.g. https://mtb-suspension-mcp.<you>.workers.dev/mcp
-    // (used to compute Claude's ui.domain). Leave unset for local dev.
-    // "PUBLIC_MCP_URL": "https://..."
+    // Optional. Claude's ui.domain is derived from the URL clients connect to;
+    // by default the Worker uses the request origin + "/mcp". Only set this to
+    // force a specific URL (e.g. behind a proxy).
+    // "PUBLIC_MCP_URL": "https://example.com/mcp"
   },
   // Per-IP rate limit (free; not billed per request). `period` must be 10 or 60.
   "ratelimits": [
