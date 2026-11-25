@@ -242,9 +242,20 @@ a custom domain, the URL changes and so does the hash: update the var.
 ### 7.3 CI/CD
 - ✅ `.github/workflows/mcp.yml` on PRs touching `mcp/`, `lib/`, `components/`:
   build UI → typecheck → test → `wrangler deploy --dry-run`.
-- 🔲 Deploy-on-merge workflow using a scoped `CLOUDFLARE_API_TOKEN` secret
-  (Workers Scripts: Edit only). Not added: needs repo secrets and a decision
-  about which branch deploys.
+- ✅ `.github/workflows/mcp-deploy.yml`: **manual** (`workflow_dispatch`) deploy.
+  Build → typecheck → test → `wrangler deploy`. Needs repo secrets
+  `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+  - **Token permissions:** create a custom API token with a single permission,
+    *Account → Workers Scripts → Edit*, scoped to just your account. No zone
+    permissions are needed for a `workers.dev` URL; add *Zone → Workers Routes →
+    Edit* (zone-scoped) only if you later attach a custom domain.
+  - Setting `CLOUDFLARE_ACCOUNT_ID` lets wrangler skip the account lookup, so
+    the token doesn't need account/user read permissions. ❓ If the first deploy
+    errors on enabling the `workers.dev` subdomain, the dashboard (Workers &
+    Pages → your Worker → Settings) can enable it once; avoid widening the token.
+  - Avoid Cloudflare's "Edit Cloudflare Workers" template: it grants KV, R2, D1
+    etc. this Worker doesn't use.
+  - 🔲 Optionally gate the job with a GitHub Environment (required reviewers).
 - 🔲 Worker-level test with `unstable_dev`/Miniflare for routing, 405/413/429.
   Currently covered only by manual curl; the unit tests exercise the server
   in-memory, not `worker.ts`.
