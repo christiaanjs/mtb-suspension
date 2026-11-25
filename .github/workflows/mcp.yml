@@ -1,0 +1,30 @@
+name: MCP server
+
+on:
+  pull_request:
+    paths:
+      - "mcp/**"
+      - "lib/**"
+      - "components/**"
+      - ".github/workflows/mcp.yml"
+
+jobs:
+  mcp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+      - run: npm ci
+        working-directory: mcp
+      - run: npm run build:ui
+        working-directory: mcp
+      - run: npm run typecheck
+        working-directory: mcp
+      - run: npm test
+        working-directory: mcp
+      - run: npx wrangler deploy --dry-run --outdir /tmp/wrangler-out
+        working-directory: mcp

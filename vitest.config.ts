@@ -4,6 +4,7 @@ import path from "path";
 export default defineConfig({
   test: {
     globals: true,
+    include: ["lib/**/*.test.ts"], // mcp/ has its own vitest config
     environment: "node",
     coverage: {
       provider: "v8",
