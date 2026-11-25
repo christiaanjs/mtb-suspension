@@ -33,6 +33,8 @@ export interface AnalysisSummary {
   ranges: Record<Metric, { min: number; max: number }>;
   /** Evenly sampled curves, `samples` points from top-out to bottom-out. */
   curves: Record<string, number[]>;
+  /** Non-fatal solver/input problems the caller should know about. */
+  warnings: string[];
 }
 
 export function summarise(
@@ -68,6 +70,7 @@ export function summarise(
     atBottomOut: pick(states[last]),
     ranges,
     curves,
+    warnings: results.warnings ?? [],
   };
 }
 
@@ -110,5 +113,6 @@ export function describe(s: AnalysisSummary, geometry: BikeGeometry): string {
     `Anti-squat ${r.antiSquat.min}–${r.antiSquat.max}%, anti-rise ${r.antiRise.min}–${r.antiRise.max}%.`,
     `Pedal kickback up to ${r.pedalKickback.max}°, chain growth up to ${r.chainGrowth.max} mm.`,
     `Full curves are in structuredContent.curves.`,
+    ...s.warnings.map((w) => `WARNING: ${w}`),
   ].join("\n");
 }

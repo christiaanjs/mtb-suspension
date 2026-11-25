@@ -243,6 +243,8 @@ export interface AnalysisResults {
   states: BikeState[];
   axlePath: Point2D[];
   frontAxlePath: Point2D[];
+  /** Non-fatal problems found while solving (unreachable strokes, inconsistent inputs). */
+  warnings?: string[];
 }
 
 export enum GraphType {

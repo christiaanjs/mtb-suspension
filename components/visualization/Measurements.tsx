@@ -6,7 +6,7 @@ export const Measurements = ({
   state,
   geometry,
 }: DrawComponentProps) => {
-  const { toCanvasX, toCanvasY, scale, height, padding } = conversion;
+  const { toCanvasX, toCanvasY, height, padding } = conversion;
   const bbPosRotated = state.bb.wheelsOnGround;
   const rearAxlePosRotated = state.rearAxle.wheelsOnGround;
   const frontAxleRotated = state.frontAxle.wheelsOnGround;
@@ -19,7 +19,7 @@ export const Measurements = ({
 
   const bbHeight = state.bb.world.y;
   const rearCenter = Math.abs(rearAxlePosRotated.x - bbPosRotated.x);
-  const frontCenter = Math.abs(frontAxleRotated.x - bbPosRotated.x) / scale;
+  const frontCenter = Math.abs(frontAxleRotated.x - bbPosRotated.x);
 
   const measurementColor = "#999";
   const measurementLineWidth = "0.67";

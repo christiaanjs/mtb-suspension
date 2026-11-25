@@ -231,3 +231,72 @@ describe("Four-bar linkage", () => {
     });
   });
 });
+
+describe("Four-bar travel and input validation", () => {
+  // DW-link style layout: rigid rear triangle on two short links. The pivot
+  // set is deliberately inconsistent with its stated bbHeight (axle Y 38 means
+  // BB height 332 for a 740 mm wheel, not 275.4) and the rocker drives the
+  // axle the wrong way, so it must NOT report plausible-looking travel.
+  const dwLink = (overrides = {}) =>
+    createDefaultGeometry({
+      overrides: {
+        suspensionType: SuspensionType.FourBar,
+        frontWheelDiameter: 740,
+        rearWheelDiameter: 740,
+        bbHeight: 275.4,
+        shockETE: 190,
+        shockStroke: 45,
+        fourBarAxleX: -429,
+        fourBarAxleY: 38,
+        lowerLinkPivotX: -35,
+        lowerLinkPivotY: 55,
+        seatstayLowerX: -85,
+        seatstayLowerY: 25,
+        rockerSeatstayX: -120,
+        rockerSeatstayY: 290,
+        rockerPivotX: -75,
+        rockerPivotY: 330,
+        rockerShockMountX: -55,
+        rockerShockMountY: 275,
+        shockFrameMountX: 121,
+        shockFrameMountY: 356,
+        ...overrides,
+      },
+    });
+
+  it("travel starts at 0 at top-out and is signed", () => {
+    const { states } = runKinematicAnalysis(dwLink({ bbHeight: 332 }));
+    expect(states[0].travelMM).toBeCloseTo(0, 6);
+    // Axle ends ~6 mm higher than it started; it must not be reported as ~50 mm.
+    expect(states[states.length - 1].travelMM).toBeLessThan(10);
+  });
+
+  it("warns when compression does not lift the axle", () => {
+    const { warnings } = runKinematicAnalysis(dwLink({ bbHeight: 332 }));
+    expect(warnings!.join(" ")).toMatch(/not positive|zero or negative/);
+  });
+
+  it("warns that shockETE and bbHeight are overridden by the other inputs", () => {
+    const { warnings } = runKinematicAnalysis(dwLink());
+    const text = warnings!.join(" ");
+    expect(text).toMatch(/shockETE/);
+    expect(text).toMatch(/bbHeight/);
+  });
+
+  it("truncates and warns when the linkage cannot reach the full stroke", () => {
+    const geo = dwLink({ bbHeight: 332, shockStroke: 100 });
+    const { states, warnings } = runKinematicAnalysis(geo);
+    expect(states.length).toBeLessThan(Math.floor(100 / 0.5) + 1);
+    expect(warnings!.join(" ")).toMatch(/cannot reach/);
+  });
+
+  it("keeps wheel rate finite when leverage ratio is ~0", () => {
+    const { states } = runKinematicAnalysis(dwLink({ bbHeight: 332, shockStroke: 100 }));
+    for (const s of states) expect(Number.isFinite(s.wheelRate)).toBe(true);
+  });
+
+  it("default four-bar bike has no travel or reachability warnings", () => {
+    const text = runKinematicAnalysis(fourBarGeometry()).warnings!.join(" ");
+    expect(text).not.toMatch(/cannot reach|not positive|zero or negative|bbHeight/);
+  });
+});

@@ -13,6 +13,7 @@ import {
   SuspensionType,
 } from "./types";
 import {
+  validateFourBar,
   establishFourBar,
   solveFourBarAtStroke,
   initialTracker,
@@ -82,6 +83,7 @@ export function runKinematicAnalysis(
 
   // First pass: calculate basic geometric state from shock stroke only
   const firstPassStates: FirstPassState[] = [];
+  const warnings: string[] = fourBarRig ? validateFourBar(geometry) : [];
   for (let step = 0; step < strokeSteps; step++) {
     const shockStroke = step * stepSize;
     const travelRatio = shockStroke / geometry.shockStroke;
@@ -97,6 +99,12 @@ export function runKinematicAnalysis(
         fourBarRig,
         tracker,
       );
+      if (!solution.reachable) {
+        warnings.push(
+          `Linkage cannot reach shock stroke ${shockStroke.toFixed(1)} mm (of ${geometry.shockStroke}); results are truncated there. Check pivot and shock mount coordinates.`,
+        );
+        break;
+      }
       tracker = next;
       firstPassStates.push({
         travelMM: solution.travelMM,
@@ -189,7 +197,8 @@ export function runKinematicAnalysis(
       leverageRatio = dTravel / (2 * stepSize);
     }
 
-    const wheelRate = geometry.shockSpringRate / (leverageRatio * leverageRatio);
+    // Clamp so a stalled/zero-leverage step stays finite (and JSON-serialisable).
+    const wheelRate = geometry.shockSpringRate / Math.max(leverageRatio * leverageRatio, 1e-6);
 
     const seatstayRef = seatstayReferenceFromFp(fp);
     const antiSquat = calculateVisualAntiSquat(fp, frontAxlePos, geometry, applyPitchRotation);
@@ -284,7 +293,16 @@ export function runKinematicAnalysis(
     frontAxlePath.push(Point2D.subtract(frontAxlePos, fp.bbPosition));
   }
 
-  return { states, axlePath, frontAxlePath };
+  if (states.length > 1 && states[states.length - 1].travelMM <= 0) {
+    warnings.push(
+      "Wheel travel is not positive over the stroke: compressing the shock moves the axle down. Check which end of the rocker the shock mounts to.",
+    );
+  } else if (states.some((s) => s.leverageRatio <= 0)) {
+    warnings.push(
+      "Leverage ratio is zero or negative somewhere in the stroke (wheel travel is not monotonic).",
+    );
+  }
+  return { states, axlePath, frontAxlePath, warnings };
 }
 
 function establishRigidTriangle(geometry: BikeGeometry): RigidTriangle {
