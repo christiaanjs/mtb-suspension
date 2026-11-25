@@ -12,8 +12,16 @@
     "noUnusedLocals": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "paths": { "@/*": ["../*"] }
+    "paths": {
+      "@/*": ["../*"],
+      // Shared code in ../lib and ../components must not depend on the root
+      // app's node_modules (absent in the mcp CI job); use this package's copy.
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"],
+      "react-dom": ["./node_modules/@types/react-dom"],
+      "react-dom/*": ["./node_modules/@types/react-dom/*"]
+    }
   },
-  "include": ["src", "ui", "*.ts", "../lib/**/*.ts", "../components/**/*.tsx"],
-  "exclude": ["../lib/**/*.test.ts", "node_modules"]
+  "include": ["src", "ui", "*.ts"],
+  "exclude": ["node_modules"]
 }
