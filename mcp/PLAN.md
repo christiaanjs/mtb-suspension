@@ -202,6 +202,13 @@ standalone (outside an iframe), which is how it is screenshot-tested.
   must stay under that path or the source list needs extending.
 - **Slider CSS** is duplicated from `app/globals.css`. 🔲 Extract to a shared
   partial if it drifts.
+- **Iframe height.** The host sizes the iframe from the document's *intrinsic*
+  height (the SDK's auto-resize measures `documentElement` with
+  `height: max-content`). A `height: 100%` layout therefore collapses to a sliver
+  in Claude (seen on first real run). The viewer now sets a definite height,
+  `clamp(440px, 72vw, 680px)`, and has no `100%` height chain. Verified by
+  loading it in a 120 px-tall viewport and measuring 440–680 px.
+  🔲 Respect `hostContext.containerDimensions.maxHeight` and fullscreen display mode.
 - **Bundle size** (~693 kB) is dominated by React + the `ext-apps` SDK + the
   kinematics code. Fine for now. ❓ Check whether Claude imposes a resource size limit.
 

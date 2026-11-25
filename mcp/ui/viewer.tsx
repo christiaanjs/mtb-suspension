@@ -50,7 +50,9 @@ function Viewer() {
     return <p className="p-4 text-sm text-gray-500">Waiting for analysis…</p>;
 
   return (
-    <div className="h-full min-h-[420px]">
+    // Definite height, scaled with the (host-controlled) iframe width, because the
+    // host sizes the iframe from this document's height.
+    <div style={{ height: "clamp(440px, 72vw, 680px)" }}>
       <AnimationView
         geometry={geometry}
         analysisResults={analysisResults}
