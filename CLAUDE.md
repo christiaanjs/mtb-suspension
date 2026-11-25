@@ -10,20 +10,21 @@ A web-based tool for analyzing mountain bike (MTB) suspension geometry and kinem
 
 ## Tech Stack
 
-- **Framework:** Next.js (app router, fully client-side — no SSR)
+- **Framework:** React 19 single-page app built with Vite (React Router, client-side only)
 - **Language:** TypeScript (strict mode)
-- **UI:** React 19, Tailwind CSS 4
-- **Bundler:** Turbopack (via Next.js dev server)
+- **UI:** React 19, Tailwind CSS 4 (`@tailwindcss/vite`)
+- **Bundler:** Vite 7
 - **Testing:** Vitest
-- **Linting:** ESLint 9 with Next.js TypeScript config
+- **Linting:** ESLint 9 (flat config) with typescript-eslint and react-hooks
+- **Hosting:** Cloudflare Pages (production + per-PR previews via GitHub Actions)
 
 ## Development Commands
 
 ```bash
 npm install          # Install dependencies
 npm run dev          # Start dev server at http://localhost:3000
-npm run build        # Production build
-npm start            # Run production server
+npm run build        # Production build (outputs dist/)
+npm run preview      # Serve the production build locally
 npm run lint         # ESLint + TypeScript checks
 npm run test         # Run unit tests
 npm run test:ui      # Visual test runner
@@ -34,10 +35,15 @@ npm run test:coverage # Coverage report (html/json/text)
 
 ```
 mtb-suspension/
-├── app/                    # Next.js app router
-│   ├── page.tsx            # Root page (Home component)
-│   ├── layout.tsx          # Root layout + metadata
+├── index.html              # Vite entry (title, meta, favicon)
+├── public/                 # Static assets (favicon)
+├── src/                    # App shell
+│   ├── main.tsx            # Entry: fonts, router, routes (/ and /linkage)
+│   ├── pages/
+│   │   ├── Home.tsx        # Main analyzer page
+│   │   └── Linkage.tsx     # Four-bar linkage inspector page
 │   └── globals.css         # Global styles + Tailwind + dark mode
+├── mcp/                    # Separate package: MCP app server (Cloudflare Worker), see mcp/PLAN.md
 ├── components/             # React UI components
 │   ├── InputPanel.tsx      # Geometry parameter inputs
 │   ├── Visualization.tsx   # SVG bike visualization container
@@ -65,16 +71,16 @@ mtb-suspension/
 │   ├── kinematics.ts       # Kinematic analysis engine
 │   ├── geometry.test.ts    # Geometry unit tests
 │   └── kinematics.test.ts  # Kinematics unit tests
+├── vite.config.ts
 ├── vitest.config.ts
-├── next.config.ts
 ├── tsconfig.json
 └── eslint.config.mjs
 ```
 
 ## Architecture & Key Conventions
 
-### All Components Are Client-Side
-Every component uses `"use client"`. There is no server-side rendering or server actions — the entire app runs in the browser.
+### Everything Runs In The Browser
+The app is a static single-page app: there is no server-side rendering, API, or server code. Routing is client-side (React Router); the host must serve `index.html` for unknown paths (Cloudflare Pages does this automatically when there is no `404.html`).
 
 ### State Lives in One Hook
 All application state is managed in `hooks/useBikeViewModel.ts`. Components receive state and callbacks as props. Do not introduce additional global state or context.
@@ -118,27 +124,36 @@ Tests cover `lib/geometry.ts` and `lib/kinematics.ts` only. Component tests do n
 
 - Test files: `lib/*.test.ts`
 - Framework: Vitest with globals enabled (no need to import `describe`/`it`/`expect`)
-- Coverage excludes `app/**` and `components/**` by config
+- Coverage excludes `src/**` and `components/**` by config
 
 When adding or modifying geometry/kinematics logic, update the corresponding test file.
 
 ## CI
 
-Three GitHub Actions workflows run on every pull request:
+Four GitHub Actions workflows run on every pull request:
 
 | Workflow | File | Command |
 |---|---|---|
 | Lint | `.github/workflows/lint.yml` | `npm run lint` |
 | TypeScript | `.github/workflows/typecheck.yml` | `npx tsc --noEmit` |
 | Test | `.github/workflows/test.yml` | `npm test -- --run` |
+| Build | `.github/workflows/build.yml` | `npm run build` |
 
-All three must pass before merging. Run them locally before pushing:
+All four must pass before merging. Run them locally before pushing:
 
 ```bash
 npm run lint          # Must pass lint workflow
 npx tsc --noEmit      # Must pass typecheck workflow
 npm test -- --run     # Must pass test workflow
+npm run build         # Must pass build workflow
 ```
+
+### Deployment (Cloudflare Pages)
+
+- `preview.yml` deploys every same-repo pull request to a Pages preview and comments the URL on the PR.
+- `deploy.yml` deploys `main` to production (also runnable manually).
+- Both need repository secrets `CLOUDFLARE_API_TOKEN` (permission: Account → Cloudflare Pages → Edit) and `CLOUDFLARE_ACCOUNT_ID`. The Pages project name defaults to `mtb-suspension`; override with the repository variable `CLOUDFLARE_PAGES_PROJECT`.
+- The MCP server (`mcp/`) has its own workflows (`mcp.yml`, `mcp-deploy.yml`); the same token can serve both if it also has Account → Workers Scripts → Edit.
 
 ## License
 

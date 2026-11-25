@@ -38,7 +38,10 @@ export interface FourBarSolution {
   seatstayLower: Point2D;
   seatstayUpper: Point2D;
   shockLength: number;
+  /** Signed vertical axle displacement relative to top-out (positive = compressing). */
   travelMM: number;
+  /** False when the linkage cannot reach this stroke (solution is the last reachable pose). */
+  reachable: boolean;
 }
 
 interface FourBarRig {
@@ -143,7 +146,7 @@ export function solveFourBarAtStroke(
 
   if (!shockEye) {
     // Linkage cannot reach this stroke — hold the previous position.
-    return { solution: trackerToSolution(geometry, rig, tracker, currentShockLength), tracker };
+    return { solution: trackerToSolution(geometry, rig, tracker, currentShockLength, false), tracker };
   }
 
   // 2. Rotate the rocker by the angle the shock eye swept, moving the upper
@@ -162,7 +165,7 @@ export function solveFourBarAtStroke(
   const seatstayLower = nearest(lowerCandidates, tracker.seatstayLower);
 
   if (!seatstayLower) {
-    return { solution: trackerToSolution(geometry, rig, tracker, currentShockLength), tracker };
+    return { solution: trackerToSolution(geometry, rig, tracker, currentShockLength, false), tracker };
   }
 
   // 4. Rear axle is rigid with the seatstay (Jl, Ju, A).
@@ -194,7 +197,11 @@ export function solveFourBarAtStroke(
     seatstayLower: shift(seatstayLower),
     seatstayUpper: shift(seatstayUpper),
     shockLength: currentShockLength,
-    travelMM: Math.abs(groundOffset),
+    // Signed, relative to the top-out axle height. (Previously |axle.y - wheelRadius|,
+    // which counted any mismatch between bbHeight/axle Y/wheel size as travel and
+    // lost the sign whenever the axle moved downward.)
+    travelMM: axle.y - rig.axle0.y,
+    reachable: true,
   };
 
   return {
@@ -208,6 +215,7 @@ function trackerToSolution(
   rig: FourBarRig,
   tracker: FourBarTracker,
   shockLength: number,
+  reachable: boolean,
 ): FourBarSolution {
   const rearWheelRadius = computedProperties.rearWheelRadius(geometry);
   const axle = transformPointByReferenceLine(
@@ -229,6 +237,34 @@ function trackerToSolution(
     seatstayLower: shift(tracker.seatstayLower),
     seatstayUpper: shift(tracker.seatstayUpper),
     shockLength,
-    travelMM: Math.abs(groundOffset),
+    travelMM: axle.y - rig.axle0.y,
+    reachable,
   };
+}
+
+/**
+ * Sanity-check four-bar inputs for conventions the solver relies on but cannot
+ * enforce. Returns human-readable warnings (empty when everything is consistent).
+ */
+export function validateFourBar(geometry: BikeGeometry): string[] {
+  const warnings: string[] = [];
+  const rig = establishFourBar(geometry);
+
+  // The solver derives shock length from the mount coordinates; shockETE is ignored.
+  const ete = rig.topOutShockLength;
+  if (Math.abs(ete - geometry.shockETE) > 1) {
+    warnings.push(
+      `Four-bar shock length is taken from the mount coordinates (${ete.toFixed(1)} mm), not shockETE (${geometry.shockETE} mm).`,
+    );
+  }
+
+  // The frame is dropped so the rear wheel touches the ground at top-out, so the
+  // axle height above the BB implies the BB height: bbHeight is overridden.
+  const impliedBbHeight = computedProperties.rearWheelRadius(geometry) - geometry.fourBarAxleY;
+  if (Math.abs(impliedBbHeight - geometry.bbHeight) > 2) {
+    warnings.push(
+      `bbHeight (${geometry.bbHeight} mm) disagrees with rear wheel radius minus axle Y (${impliedBbHeight.toFixed(1)} mm); the analysis uses the latter.`,
+    );
+  }
+  return warnings;
 }

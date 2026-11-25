@@ -1,0 +1,94 @@
+name: MCP server preview
+
+# Per-PR preview of the MCP server: uploads a new Worker *version* with a
+# preview alias (pr-<number>) via `wrangler versions upload`. This does NOT
+# change production, and the alias URL is stable across pushes to the PR.
+#
+# Requires repository secrets CLOUDFLARE_API_TOKEN (Account → Workers Scripts → Edit)
+# and CLOUDFLARE_ACCOUNT_ID, and the Worker must already exist (run the
+# "MCP server deploy" workflow once first). Skipped for fork PRs (no secrets).
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "mcp/**"
+      - "lib/**"
+      - "components/**"
+      - ".github/workflows/mcp-preview.yml"
+
+concurrency:
+  group: mcp-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  preview:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+      - run: npm ci
+        working-directory: mcp
+      - run: npm run build:ui
+        working-directory: mcp
+
+      - name: Upload preview version
+        id: upload
+        working-directory: mcp
+        run: |
+          npx wrangler versions upload \
+            --preview-alias "pr-${{ github.event.pull_request.number }}" \
+            --tag "${{ github.event.pull_request.head.sha }}" \
+            --message "PR #${{ github.event.pull_request.number }} @ ${{ github.event.pull_request.head.sha }}" \
+            | tee upload.log
+          # Prefer the stable alias URL; fall back to the per-version URL.
+          url=$(grep -i "alias" upload.log | grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' | head -1)
+          if [ -z "$url" ]; then url=$(grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' upload.log | head -1); fi
+          if [ -z "$url" ]; then echo "Could not find a preview URL in wrangler output" >&2; exit 1; fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Comment PR with preview URL
+        uses: actions/github-script@v7
+        env:
+          PREVIEW_URL: ${{ steps.upload.outputs.url }}
+        with:
+          script: |
+            const url = process.env.PREVIEW_URL;
+            const sha = context.payload.pull_request.head.sha.substring(0, 7);
+            const marker = '<!-- mcp-preview -->';
+            const body = `${marker}\n## MCP server preview\n\n| | |\n|---|---|\n| **MCP endpoint** | \`${url}/mcp\` |\n| **Commit** | \`${sha}\` |\n\nAdd \`${url}/mcp\` as a custom connector to try this version. Production is unchanged.\n`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

@@ -1,5 +1,3 @@
-"use client";
-
 import { AnalysisResults, GraphType } from "@/lib/types";
 
 interface GraphProps {

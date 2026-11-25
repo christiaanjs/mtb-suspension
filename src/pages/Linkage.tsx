@@ -1,7 +1,5 @@
-"use client";
-
 import React, { useState, useEffect, useRef } from "react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { useBikeViewModel } from "@/hooks/useBikeViewModel";
 import {
   InputSection,
@@ -49,7 +47,7 @@ export default function LinkagePage() {
           </div>
           <div className="flex items-center gap-1.5 lg:gap-2 flex-shrink-0">
             <Link
-              href="/"
+              to="/"
               className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             >
               ← Full bike

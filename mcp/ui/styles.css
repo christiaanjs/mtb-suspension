@@ -1,0 +1,19 @@
+@import "tailwindcss";
+/* Tailwind only scans this dir by default; the shared SVG components live above it. */
+@source "../../components";
+
+:root { --slider-fill: #2563eb; --slider-track: #e5e7eb; }
+@media (prefers-color-scheme: dark) {
+  :root { --slider-fill: #3b82f6; --slider-track: #374151; }
+}
+/* No height:100% chain: the host sizes the iframe from the document's intrinsic
+   height (App auto-resize measures it), so the viewer must define its own. */
+html, body { margin: 0; }
+
+/* Same range-slider styling as the web app (app/globals.css). */
+input[type="range"].slider { -webkit-appearance: none; appearance: none; width: 100%; height: 18px; background: transparent; }
+input[type="range"].slider::-webkit-slider-runnable-track { height: 6px; border-radius: 9999px; background: linear-gradient(to right, var(--slider-fill) var(--p, 0%), var(--slider-track) var(--p, 0%)); }
+input[type="range"].slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; margin-top: -6px; height: 18px; width: 18px; border-radius: 9999px; background: #fff; border: 2px solid var(--slider-fill); box-shadow: 0 1px 3px rgb(0 0 0 / 0.3); }
+input[type="range"].slider::-moz-range-track { height: 6px; border-radius: 9999px; background: var(--slider-track); }
+input[type="range"].slider::-moz-range-progress { height: 6px; border-radius: 9999px; background: var(--slider-fill); }
+input[type="range"].slider::-moz-range-thumb { height: 14px; width: 14px; border-radius: 9999px; background: #fff; border: 2px solid var(--slider-fill); }
